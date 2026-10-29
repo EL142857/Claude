@@ -55,7 +55,25 @@ def _tuned_conclusion(t):
     better = r[r["ic"] > r["ic_shared"]]
     return (f"<b>每个预测期独立选模型、独立训练:</b>{picks}。和之前所有预测期用同一套设置相比,"
             f"IC 变高的有 {len(better)}/{len(r)} 个预测期,平均 IC 从 {r['ic_shared'].mean():+.3f} 变为 {r['ic'].mean():+.3f}。"
-            "选模型只用了各自训练期的数据,所以这个对比本身也是样本外的。")
+            "选模型只用了各自训练期的数据,所以这个对比本身也是样本外的。"
+            + _multiple_testing(r))
+
+
+def _multiple_testing(r):
+    from scipy import stats
+    m = len(r)
+    hits = []
+    for _, x in r.iterrows():
+        p_ic = 2 * (1 - stats.norm.cdf(abs(x["ic_t"])))
+        p = min(p_ic, x["hit_edge_p"] if x["hit_edge"] > 0 else 1.0)
+        if p < 0.05:
+            hits.append((x["label"], p))
+    if not hits:
+        return ""
+    lst = "、".join(f"{lab}(p={p:.3f})" for lab, p in hits)
+    keep = [lab for lab, p in hits if p < 0.05 / m]
+    return (f" 名义上 p<0.05 的:{lst}。但同时检验了 {m} 个预测期,按 Bonferroni 校正门槛是 {0.05 / m:.4f},"
+            + (f"能通过的只有 {'、'.join(keep)}。" if keep else "没有一个能通过 — 这些很可能是多次尝试里的偶然结果,需要更长的样本外数据确认。"))
 
 
 def build(t, cost, path):
@@ -65,13 +83,13 @@ def build(t, cost, path):
     rows = []
     for _, r in t.iterrows():
         if np.isnan(r.get("n", np.nan)):
-            rows.append(f"<tr><td class='h'>{r['label']}</td><td class='na' colspan='{14 if tuned else 13}'>"
+            rows.append(f"<tr><td class='h'>{r['label']}</td><td class='na' colspan='{13 if tuned else 12}'>"
                         f"{r['data']}</td></tr>")
             continue
-        sub = r["data"] + (f" · {LABEL_ZH[r['config']]} · 重训 {int(r['n_refits'])} 次" if tuned else "")
+        window = r["test_window"].replace(" 至 20", " → ")[2:]
+        sub = r["data"] + "<br>" + window + (f" · {LABEL_ZH[r['config']]} · 重训 {int(r['n_refits'])} 次" if tuned else "")
         rows.append(
             f"<tr><td class='h'>{r['label']}<small>{sub}</small></td>"
-            f"<td class='muted'>{r['test_window'].replace(' 至 20', ' → ')[2:]}</td>"
             f"<td>{int(r['n'])}{'' if r['n_eff'] == r['n'] else ' (' + str(int(r['n_eff'])) + ')'}</td>"
             f"<td>{r['typical_move_bp']:.1f}</td>"
             f"<td>{_pct(r['price_err_model'], 3)}</td><td class='muted'>{_pct(r['price_err_rw'], 3)}</td>"
@@ -92,9 +110,9 @@ def build(t, cost, path):
 
 <h2>准确率表</h2>
 <div class="card tw"><table>
-<tr><th colspan="4"></th><th class="grp" colspan="2">价格误差</th><th class="grp" colspan="4">涨跌方向</th>
+<tr><th colspan="3"></th><th class="grp" colspan="2">价格误差</th><th class="grp" colspan="4">涨跌方向</th>
 <th class="grp" colspan="{3 if tuned else 2}">排序</th><th class="grp">风险</th><th class="grp">交易</th></tr>
-<tr><th>预测期 / 数据</th><th>样本外区间</th><th>样本数</th><th>典型波动 bp</th>
+<tr><th>预测期 / 数据 / 样本外区间</th><th>样本数</th><th>典型波动 bp</th>
 <th>模型</th><th>不预测</th><th>命中率</th><th>多数方向</th><th>超出(百分点)</th><th>p 值</th>
 <th>IC</th><th>IC t</th>{"<th>统一设置时 IC</th>" if tuned else ""}<th>80%覆盖</th><th>每笔超额 bp</th></tr>
 {''.join(rows)}</table></div>

@@ -105,3 +105,13 @@ python horizon_intraday.py   # 日内 1 小时/30/15/5/2/1 分钟 + 合并表 �
 同时段成交量、振幅、时段(开盘/收盘 30 分钟)、开盘动量 × 收盘窗口、期权到期日、财报反应日,以及日线外部因子模型对当天的预测。
 Yahoo 只保留最近一段日内数据(60m 约 2 年、5–30m 约 60 天、1–2m 约 30 天),缓存每次运行追加新 K 线。
 30 秒及更短需要逐笔数据,Yahoo 不提供。
+
+### 每个预测期独立选模型(`horizon_tuned.py`)
+
+```bash
+python horizon_tuned.py   # 每个预测期在自己的训练期内交叉验证选模型,再独立滚动训练 → output/horizon_tuned.html
+```
+
+候选模型(`tuning.py`):Ridge、LightGBM 小/中/大、Ridge+LightGBM 混合(小/中/大),按各预测期训练期内清洗过的滚动交叉验证 IC 选择。
+结果与"所有预测期用同一套设置"的版本并列对比,并对 8 个预测期做 Bonferroni 多重检验校正。
+
