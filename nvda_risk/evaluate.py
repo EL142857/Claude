@@ -38,6 +38,11 @@ def forecast_metrics(fc, price, h):
         "hit_rate": k / n if n else np.nan,
         "hit_rate_pvalue": float(stats.binomtest(k, n, 0.5, alternative="greater").pvalue) if n else np.nan,
         "up_share_actual": float((y > 0).mean()),
+        # the bar a direction call must clear: always betting on the majority side
+        "hit_rate_always_up": float(max((y > 0).mean(), (y < 0).mean())),
+        "hit_rate_pvalue_vs_always_up": float(stats.binomtest(
+            k, n, max((y > 0).mean(), (y < 0).mean()), alternative="greater").pvalue) if n else np.nan,
+        "share_pred_up": float((mu > 0).mean()),
         "ic_spearman": float(ic),
         "monthly_ic_mean": float(monthly_ic.mean()),
         "monthly_ic_tstat": float(monthly_ic.mean() / monthly_ic.std() * np.sqrt(len(monthly_ic)))

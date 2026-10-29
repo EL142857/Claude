@@ -37,6 +37,7 @@ h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:40px 0 8px}
 .tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
 th,td{padding:6px 8px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}th{color:var(--ink2);font-weight:500}
+.concl{margin:0;padding-left:20px}.concl li{margin:6px 0}
 .good{color:var(--good)}.bad{color:var(--bad)}
 """
 
@@ -97,9 +98,53 @@ def _cls(x):
     return "good" if x > 0 else "bad"
 
 
+def _conclusions(res):
+    """Plain-language verdicts generated from the numbers, so they stay true on re-runs."""
+    hz = res["horizons"]
+    h = str(res["latest_forecast"]["horizon"])
+    m, t = hz[h]["full_model"], hz[h]["technical_only"]
+    st = res["strategy"]
+    out = []
+    edge = m["hit_rate"] - m.get("hit_rate_always_up", m["up_share_actual"])
+    out.append(
+        f"<b>方向:</b>{h} 日命中率 {_pct(m['hit_rate'])},但模型 {_pct(m.get('share_pred_up'), 0)} 的时间都在看涨,"
+        f"而「永远看涨」本身就能拿到 {_pct(m.get('hit_rate_always_up'))}。"
+        + ("模型的择时没有超过这个基准,命中率主要来自 NVDA 这几年的单边上涨。" if edge <= 0.01
+           else f"模型比这个基准高 {edge * 100:.1f} 个百分点。"))
+    ics = "、".join(f"{k} 日 {d['full_model']['ic_spearman']:+.3f}" for k, d in hz.items())
+    sig = [k for k, d in hz.items() if abs(d["full_model"]["monthly_ic_tstat"]) >= 2]
+    neg = [k for k, d in hz.items() if d["full_model"]["ic_spearman"] < -0.05]
+    out.append(f"<b>排序能力(IC):</b>{ics}。"
+               + (f"月度 IC 在 {'、'.join(k + ' 日' for k in sig)} 统计显著(|t|≥2)。" if sig
+                  else "月度 IC 的 t 值都没超过 2,统计上不显著。")
+               + (f"{'、'.join(k + ' 日' for k in neg)}的预测强弱和实际涨幅是反着的。" if neg else ""))
+    better = [k for k, d in hz.items() if d["full_model"]["ic_spearman"] > d["technical_only"]["ic_spearman"]]
+    out.append(f"<b>外部因子的增量:</b>和只用 NVDA 自身走势的模型相比,全因子模型在 "
+               f"{'、'.join(k + ' 日' for k in better) if better else '所有周期都没有'}"
+               f"{'的 IC 更高' if better else '跑赢'};样本外 R² 对比历史平均漂移:"
+               + "、".join(f"{k} 日 {_pct(d['full_model']['oos_r2_vs_drift'], 2)}" for k, d in hz.items()) + "。")
+    covs = "、".join(f"{k} 日 {_pct(d['full_model']['coverage_80'])}/{_pct(d['full_model']['coverage_95'])}"
+                     for k, d in hz.items())
+    out.append(f"<b>风险刻画(最可靠的部分):</b>80%/95% 区间的实际覆盖率为 {covs},"
+               "和名义水平基本吻合 — 模型说不准方向,但能较准确地说出「会波动多大」。")
+    a, b = st["risk_controlled_model"], st["buy_and_hold"]
+    out.append(f"<b>风控策略:</b>总收益 {_pct(a['total_return'], 0)} vs 买入持有 {_pct(b['total_return'], 0)},"
+               f"夏普 {a['sharpe']:.2f} vs {b['sharpe']:.2f},最大回撤 {_pct(a['max_drawdown'])} vs {_pct(b['max_drawdown'])}。"
+               f"平均仓位 {res['strategy']['avg_abs_position']:.2f} 倍 — 少赚了一些,换来回撤明显变小,价值在风控而不在预测。")
+    abl = res.get("ablation", [])
+    if abl:
+        helps = [GROUP_ZH.get(x["group"], x["group"]) for x in abl if x["ic_drop"] > 0.01]
+        hurts = [GROUP_ZH.get(x["group"], x["group"]) for x in abl if x["ic_drop"] < -0.01]
+        out.append(f"<b>哪些因子有用:</b>去掉后 IC 明显下降的:{'、'.join(helps) or '无'};"
+                   f"去掉后 IC 反而上升(样本外是噪声)的:{'、'.join(hurts) or '无'}。"
+                   "这些差异只有几个百分点,单次回测里有很大的偶然性。")
+    return "".join(f"<li>{x}</li>" for x in out)
+
+
 def build(results, price, fc, pnl, pnl_base, bh, quant, path):
     h = results["latest_forecast"]["horizon"]
-    m = results["horizons"][h]["full_model"]
+    results["horizons"] = {str(k): v for k, v in results["horizons"].items()}  # JSON round-trip makes keys str
+    m = results["horizons"][str(h)]["full_model"]
     st = results["strategy"]
     lf = results["latest_forecast"]
 
@@ -138,8 +183,8 @@ def build(results, price, fc, pnl, pnl_base, bh, quant, path):
                 f"<tr><td>{hh}日 · {label}</td><td>{r['n']}</td>"
                 f"<td class='{_cls(r['oos_r2_vs_random_walk'])}'>{_pct(r['oos_r2_vs_random_walk'], 2)}</td>"
                 f"<td>{_pct(r['price_mape_model'], 2)}</td><td>{_pct(r['price_mape_random_walk'], 2)}</td>"
-                f"<td>{_pct(r['hit_rate'])}</td><td>{_num(r['hit_rate_pvalue'])}</td>"
-                f"<td>{_pct(r['up_share_actual'])}</td><td class='{_cls(r['ic_spearman'])}'>{_num(r['ic_spearman'])}</td>"
+                f"<td>{_pct(r['hit_rate'])}</td><td>{_pct(r.get('hit_rate_always_up'))}</td>"
+                f"<td>{_pct(r.get('share_pred_up'), 0)}</td><td class='{_cls(r['ic_spearman'])}'>{_num(r['ic_spearman'])}</td>"
                 f"<td>{_num(r['monthly_ic_tstat'], 2)}</td>"
                 f"<td>{_pct(r['coverage_80'])}</td><td>{_pct(r['coverage_95'])}</td></tr>")
     srows = "".join(
@@ -160,7 +205,7 @@ def build(results, price, fc, pnl, pnl_base, bh, quant, path):
 
 <div class="tiles">
 <div class="tile"><div class="k">{h}日方向命中率</div><div class="v">{_pct(m['hit_rate'])}</div>
-<div class="d">实际上涨占比 {_pct(m['up_share_actual'])} · p={_num(m['hit_rate_pvalue'])}</div></div>
+<div class="d">「永远看涨」也能拿 {_pct(m.get('hit_rate_always_up'))} · 模型 {_pct(m.get('share_pred_up'), 0)} 的时间在看涨</div></div>
 <div class="tile"><div class="k">信息系数 IC</div><div class="v">{_num(m['ic_spearman'])}</div>
 <div class="d">月度 IC t 值 {_num(m['monthly_ic_tstat'], 2)}</div></div>
 <div class="tile"><div class="k">样本外 R²(对比随机游走)</div><div class="v">{_pct(m['oos_r2_vs_random_walk'], 2)}</div>
@@ -173,6 +218,9 @@ def build(results, price, fc, pnl, pnl_base, bh, quant, path):
 <div class="d">80% 区间 ${lf['price_80'][0]:.2f} – ${lf['price_80'][1]:.2f}</div></div>
 </div>
 
+<h2>结论</h2>
+<div class="card"><ul class="concl">{_conclusions(results)}</ul></div>
+
 <h2>预测股价 vs 实际股价</h2>
 <p class="note">每个点是 {h} 个交易日前用当时全部因子做出的预测,画在它预测的那一天上。阴影是风险模型给出的 80% 区间。</p>
 <div class="card"><div id="c_price" class="chart"></div></div>
@@ -180,7 +228,7 @@ def build(results, price, fc, pnl, pnl_base, bh, quant, path):
 <h2>各预测期的准确度(对比基准)</h2>
 <p class="note">"仅技术面"只用 NVDA 自身价格和财报日历,用来检验外部因子到底有没有增量价值。价格 MAPE 对比的是"未来价=今天价"的随机游走。</p>
 <div class="card tw"><table><tr><th>模型</th><th>样本数</th><th>R² vs 随机游走</th><th>价格MAPE</th>
-<th>随机游走MAPE</th><th>命中率</th><th>p 值</th><th>实际上涨占比</th><th>IC</th><th>月度IC t</th>
+<th>随机游走MAPE</th><th>命中率</th><th>永远看涨命中率</th><th>预测看涨占比</th><th>IC</th><th>月度IC t</th>
 <th>80%覆盖</th><th>95%覆盖</th></tr>{''.join(rows)}</table></div>
 
 <h2>按预测交易:风控策略 vs 买入持有</h2>

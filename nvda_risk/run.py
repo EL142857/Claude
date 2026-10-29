@@ -3,6 +3,7 @@
   python run.py                 # use cached data, download what is missing
   python run.py --refresh       # re-download everything
   python run.py --no-ablation   # skip the per-group attribution (faster)
+  python run.py --report-only   # rebuild the report from saved forecasts
 """
 import argparse
 import json
@@ -20,6 +21,25 @@ from config import HORIZONS, MAIN_HORIZON, TEST_START
 
 OUT = Path(__file__).parent / "output"
 BASELINE_GROUPS = ("own_technical", "events")
+
+
+def report_only(out=OUT):
+    """Recompute metrics and rebuild the report from saved forecasts (no retraining)."""
+    ohlcv, fred, earnings, _ = data.load_all()
+    X, groups, Y, price = features.build(ohlcv, fred, earnings)
+    results = json.loads((out / "results.json").read_text())
+    rd = lambda f: pd.read_csv(out / f, index_col=0, parse_dates=True)
+    for h in HORIZONS:
+        results["horizons"][str(h)]["full_model"] = ev.forecast_metrics(rd(f"forecast_h{h}.csv"), price, h)
+        if (out / f"forecast_tech_h{h}.csv").exists():
+            results["horizons"][str(h)]["technical_only"] = ev.forecast_metrics(
+                rd(f"forecast_tech_h{h}.csv"), price, h)
+    s = rd("strategy.csv")
+    quant = X[["cta_nvda_pos", "cta_ndx_pos", "volctl_expo", "riskpar_lev"]].loc[TEST_START:]
+    report.build(results, price, rd(f"forecast_h{MAIN_HORIZON}.csv"), s["pnl"], s["pnl_tech"], s["bh"],
+                 quant, out / "report.html")
+    (out / "results.json").write_text(json.dumps(results, indent=2, default=float))
+    print(f"wrote {out / 'report.html'}")
 
 
 def main(refresh=False, ablation=True, ohlcv=None, fred=None, earnings=None, out=OUT):
@@ -46,6 +66,7 @@ def main(refresh=False, ablation=True, ohlcv=None, fred=None, earnings=None, out
         base = model.walk_forward(X, y, r1, TEST_START, h, cols=base_cols)
         forecasts[h] = full
         full.to_csv(out / f"forecast_h{h}.csv")
+        base.to_csv(out / f"forecast_tech_h{h}.csv")
         results["horizons"][h] = {
             "full_model": ev.forecast_metrics(full, price, h),
             "technical_only": ev.forecast_metrics(base, price, h),
@@ -110,5 +131,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--no-ablation", action="store_true")
+    ap.add_argument("--report-only", action="store_true", help="rebuild report from saved forecasts")
     a = ap.parse_args()
-    main(refresh=a.refresh, ablation=not a.no_ablation)
+    if a.report_only:
+        report_only()
+    else:
+        main(refresh=a.refresh, ablation=not a.no_ablation)
