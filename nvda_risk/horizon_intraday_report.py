@@ -3,8 +3,10 @@ import numpy as np
 
 from report import CSS, _num, _pct
 
-EXTRA = """th.grp{text-align:center;border-bottom:1px solid var(--axis);color:var(--ink)}
-td.h{font-weight:600}.muted{color:var(--muted)}td.na{text-align:left;color:var(--muted)}"""
+EXTRA = """main{max-width:1200px}table{font-size:12.5px}th,td{padding:6px 6px}
+th.grp{text-align:center;border-bottom:1px solid var(--axis);color:var(--ink)}
+td.h{font-weight:600}td.h small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+.muted{color:var(--muted)}td.na{text-align:left;color:var(--muted)}"""
 
 
 def _c(x):
@@ -50,10 +52,11 @@ def build(t, cost, path):
     rows = []
     for _, r in t.iterrows():
         if np.isnan(r.get("n", np.nan)):
-            rows.append(f"<tr><td class='h'>{r['label']}</td><td class='na' colspan='14'>{r['data']}</td></tr>")
+            rows.append(f"<tr><td class='h'>{r['label']}</td><td class='na' colspan='13'>{r['data']}</td></tr>")
             continue
         rows.append(
-            f"<tr><td class='h'>{r['label']}</td><td class='muted'>{r['data']}</td><td class='muted'>{r['test_window']}</td>"
+            f"<tr><td class='h'>{r['label']}<small>{r['data']}</small></td>"
+            f"<td class='muted'>{r['test_window'].replace(' 至 20', ' → ')[2:]}</td>"
             f"<td>{int(r['n'])}{'' if r['n_eff'] == r['n'] else ' (' + str(int(r['n_eff'])) + ')'}</td>"
             f"<td>{r['typical_move_bp']:.1f}</td>"
             f"<td>{_pct(r['price_err_model'], 3)}</td><td class='muted'>{_pct(r['price_err_rw'], 3)}</td>"
@@ -61,7 +64,8 @@ def build(t, cost, path):
             f"<td class='{_c(r['hit_edge'])}'>{r['hit_edge'] * 100:+.1f}</td><td>{_num(r['hit_edge_p'], 2)}</td>"
             f"<td class='{_c(r['ic'])}'>{_num(r['ic'])}</td><td>{_num(r['ic_t'], 2)}</td>"
             f"<td>{_pct(r['coverage_80'])}</td>"
-            f"<td class='{_c(r['edge_per_trade_bp'] - cost)}'>{r['edge_per_trade_bp']:+.2f}</td></tr>")
+            f"<td class='{'good' if r['edge_per_trade_bp'] > cost and abs(r['ic_t']) >= 2 else ''}'>"
+            f"{r['edge_per_trade_bp']:+.2f}</td></tr>")
     html = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>从一周到一分钟</title>
 <style>{CSS}{EXTRA}</style></head><body><main>
@@ -72,16 +76,16 @@ def build(t, cost, path):
 
 <h2>准确率表</h2>
 <div class="card tw"><table>
-<tr><th colspan="5"></th><th class="grp" colspan="2">价格误差</th><th class="grp" colspan="4">涨跌方向</th>
+<tr><th colspan="4"></th><th class="grp" colspan="2">价格误差</th><th class="grp" colspan="4">涨跌方向</th>
 <th class="grp" colspan="2">排序</th><th class="grp">风险</th><th class="grp">交易</th></tr>
-<tr><th>预测期</th><th>数据</th><th>样本外区间</th><th>样本数</th><th>典型波动 bp</th>
+<tr><th>预测期 / 数据</th><th>样本外区间</th><th>样本数</th><th>典型波动 bp</th>
 <th>模型</th><th>不预测</th><th>命中率</th><th>多数方向</th><th>超出(百分点)</th><th>p 值</th>
 <th>IC</th><th>IC t</th><th>80%覆盖</th><th>每笔超额 bp</th></tr>
 {''.join(rows)}</table></div>
 <p class="note">不预测 = 直接用现在的价格当下一刻的预测。多数方向 = 样本外里涨和跌哪个多就一直猜哪个。
 样本数括号里是有效样本(多日窗口互相重叠,按 样本数÷天数 计),p 值和 IC t 都按有效样本计算。
 典型波动 = 该时间尺度上价格平均变动多少 bp(1bp = 0.01%)。每笔超额 = 按预测方向交易一次的平均收益减去一直持有,未扣成本;
-绿色表示超过约 {cost:g}bp 的来回价差成本。</p>
+只有超过约 {cost:g}bp 的来回价差成本、且 IC 显著(|t|≥2)时才标绿。</p>
 
 <h2>结论</h2>
 <div class="card"><ul class="concl">{_conclusions(t, cost)}</ul></div>

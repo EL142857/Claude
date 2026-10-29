@@ -93,3 +93,15 @@ python run_panel.py --reuse  # 把结果并入 output/panel/report.html
 
 线性模型 y = 股票截距 + Σ(共同斜率 + 个股偏离)×因子,偏离按 c 收缩;c 和 alpha 只用 2024 年前数据做清洗过的滚动交叉验证选择。
 与"统一斜率""各股独立""合并 LightGBM"在同一滚动框架下比较;按季度分块自助法检验个股偏离是否显著。
+
+## 从一周到一分钟(`horizon_intraday.py`)
+
+```bash
+python horizon_table.py      # 先跑:日线模型 1–60 日的滚动预测
+python horizon_intraday.py   # 日内 1 小时/30/15/5/2/1 分钟 + 合并表 → output/horizon_intraday.html
+```
+
+日内模型(`intraday.py`):预测下一根 K 线的收益,特征为 NVDA 自身近几根 K 线、QQQ/SMH/SPY 联动、统计套利残差、日内 VIX、
+同时段成交量、振幅、时段(开盘/收盘 30 分钟)、开盘动量 × 收盘窗口、期权到期日、财报反应日,以及日线外部因子模型对当天的预测。
+Yahoo 只保留最近一段日内数据(60m 约 2 年、5–30m 约 60 天、1–2m 约 30 天),缓存每次运行追加新 K 线。
+30 秒及更短需要逐笔数据,Yahoo 不提供。
