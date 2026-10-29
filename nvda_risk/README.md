@@ -82,3 +82,14 @@ python run_panel.py --reuse   # 复用已保存的滚动预测,只重做分析�
 - 冲击情景(`config.SCENARIOS`):把一组因子推 1σ,看每只股票的预测反应;
   再用历史回归(Newey-West t 值)核对模型说的差异是否真实存在
 - 报告:`output/panel/report.html`
+
+### 分层模型(`run_hier.py`)
+
+```bash
+python run_hier.py           # 交叉验证 + 4 种模型滚动对比 + 自助法(约 15 分钟,需先跑 run_panel.py)
+python run_hier.py --reuse   # 复用已选参数和预测,只重做自助法
+python run_panel.py --reuse  # 把结果并入 output/panel/report.html
+```
+
+线性模型 y = 股票截距 + Σ(共同斜率 + 个股偏离)×因子,偏离按 c 收缩;c 和 alpha 只用 2024 年前数据做清洗过的滚动交叉验证选择。
+与"统一斜率""各股独立""合并 LightGBM"在同一滚动框架下比较;按季度分块自助法检验个股偏离是否显著。
