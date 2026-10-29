@@ -91,12 +91,14 @@ def metrics(mu, S):
     n = len(y)
     n_eff = max(n // S["ahead"], 3)
     nz = y != 0
-    hit = float((np.sign(mu[nz]) == np.sign(y[nz])).mean())
+    act = nz & (mu != 0)                      # a zero forecast is "no trade", not a miss
+    hit = float((np.sign(mu[act]) == np.sign(y[act])).mean())
     up = float((y[nz] > 0).mean())
     base = max(up, 1 - up)
     ic = float(stats.spearmanr(mu, y).statistic)
-    out = {"n": n, "n_eff": n_eff, "hit": hit, "base": base, "hit_edge": hit - base,
-           "hit_p": float(stats.binomtest(round(hit * n_eff), n_eff, base, alternative="greater").pvalue),
+    n_act = max(int(act.sum()) // S["ahead"], 3)
+    out = {"n": n, "n_eff": n_eff, "n_trades": int(act.sum()), "hit": hit, "base": base, "hit_edge": hit - base,
+           "hit_p": float(stats.binomtest(round(hit * n_act), n_act, base, alternative="greater").pvalue),
            "ic": ic, "ic_t": float(ic * np.sqrt(n_eff - 2) / np.sqrt(max(1 - ic ** 2, 1e-9))),
            "edge_bp": float(((np.sign(mu) * y).mean() - y.mean()) * 1e4)}
     if S["ticker"].nunique() > 1:                                  # cross-sectional rank IC per timestamp
@@ -118,24 +120,28 @@ def reality_check(preds, S, seed=0):
     day = S["day"].values[m]
     nz = y != 0
     hits = np.stack([(np.sign(preds[k][m]) == np.sign(y)).astype(float) for k in names])
+    act = np.stack([nz & (preds[k][m] != 0) for k in names])          # traded rows per model
     up = (y[nz] > 0).mean()
     base = max(up, 1 - up)
-    obs_hit = hits[:, nz].mean(axis=1) - base
+    obs_hit = (hits * act).sum(axis=1) / act.sum(axis=1) - base
     obs_ic = np.array([stats.spearmanr(preds[k][m], y).statistic for k in names])
     ud = np.unique(day)
     rows_by_day = {d: np.flatnonzero(day == d) for d in ud}
-    mx_hit, mx_ic = [], []
+    mx_hit, mx_ic, each_ic = [], [], []
     for _ in range(N_BOOT):
         idx = np.concatenate([rows_by_day[d] for d in rng.choice(ud, len(ud))])
-        nzb = nz[idx]
-        h = hits[:, idx][:, nzb].mean(axis=1) - base
+        ab = act[:, idx]
+        h = (hits[:, idx] * ab).sum(axis=1) / ab.sum(axis=1) - base
         mx_hit.append(np.max(h - obs_hit))
         icb = np.array([stats.spearmanr(preds[k][m][idx], y[idx]).statistic for k in names])
         mx_ic.append(np.max(icb - obs_ic))
+        each_ic.append(icb - obs_ic)
     return {"best_hit_model": names[int(np.argmax(obs_hit))], "best_hit_edge": float(obs_hit.max()),
             "rc_p_hit": float(np.mean(np.array(mx_hit) >= obs_hit.max())),
             "best_ic_model": names[int(np.argmax(obs_ic))], "best_ic": float(obs_ic.max()),
-            "rc_p_ic": float(np.mean(np.array(mx_ic) >= obs_ic.max()))}
+            "rc_p_ic": float(np.mean(np.array(mx_ic) >= obs_ic.max())),
+            # each model on its own, day-clustered: P(recentred bootstrap IC >= observed IC)
+            "single_p_ic": {k: float(np.mean(np.array(each_ic)[:, i] >= obs_ic[i])) for i, k in enumerate(names)}}
 
 
 def main():
@@ -158,13 +164,16 @@ def main():
             print(f"   {name:16s} IC {table[name]['ic']:+.3f} (t {table[name]['ic_t']:+.2f})  "
                   f"hit edge {table[name]['hit_edge'] * 100:+.1f}pp (p {table[name]['hit_p']:.3f})  cv {cv[name]:+.3f}")
         rc = reality_check(preds, S)
+        pd.DataFrame({"ts": S["ts"], "ticker": S["ticker"], "y": S["y_raw"], **preds}).to_csv(
+            OUT / f"study30_preds_{key}.csv", index=False)
         per_stock = {}
         if S["ticker"].nunique() > 1:
             for t in UNIVERSE:
                 mask = (S["ticker"] == t).values
                 sub = {k: v[mask] if isinstance(v, pd.Series) else v for k, v in S.items()}
                 sub = {k: (v.reset_index(drop=True) if isinstance(v, pd.Series) else v) for k, v in sub.items()}
-                per_stock[t] = {name: metrics(preds[name][mask], sub) for name in (pick, "lgbm_small")}
+                per_stock[t] = {name: metrics(preds[name][mask], sub)
+                                for name in dict.fromkeys((pick, "lgbm_small", "rule_reversal"))}
         test_days = days[len(days) // 2:]
         res[key] = {"title": title, "rows": len(S["X"]), "n_features": int(S["X"].shape[1]),
                     "days": len(days), "test_window": f"{pd.Timestamp(test_days[0]):%Y-%m-%d} 至 {pd.Timestamp(test_days[-1]):%Y-%m-%d}",

@@ -34,11 +34,22 @@ def _verdict(res):
         good = [t for t, d in ps.items() if d[pick]["ic"] > 0]
         lines.append(f"<b>能否推广到其他股票:</b>合并模型在 9 只股票上 IC 为正的有 {len(good)} 只({'、'.join(good) or '无'});"
                      f"NVDA 自己 {ps['NVDA'][pick]['ic']:+.3f}。")
-    promising = any((s["models"][s["cv_pick"]]["hit_p"] < 0.05 or abs(s["models"][s["cv_pick"]]["ic_t"]) >= 2)
-                    and min(s["reality_check"]["rc_p_hit"], s["reality_check"]["rc_p_ic"]) < 0.05 for s in res.values())
-    head = ("<p class='verdict'><b>结论:有希望,值得继续跟踪。</b>至少一组在事先选定模型和全模型运气检验下都站得住。</p>"
+    def passes(s):
+        p, rc = s["models"][s["cv_pick"]], s["reality_check"]
+        return ((p["hit_p"] < 0.05 and rc["rc_p_hit"] < 0.05 and rc["best_hit_model"] == s["cv_pick"])
+                or (rc["single_p_ic"][s["cv_pick"]] < 0.05 and rc["rc_p_ic"] < 0.05))
+    promising = sum(passes(s) for s in res.values()) >= 2      # must replicate in a second setup
+    # leads: positive in the training-period CV *and* out of sample, in every setup
+    leads = [k for k in MODELS if all((s["cv_scores"][k] or 0) > 0 and s["models"][k]["ic"] > 0 for s in res.values())]
+    if leads:
+        lines.append("<b>在三组里训练期和样本外 IC 都为正的模型:</b>"
+                     + "、".join(f"{LABEL[k]}(样本外 IC " + " / ".join(f"{res[g]['models'][k]['ic']:+.3f}" for g in res)
+                                 + ",单独检验 p " + " / ".join(f"{res[g]['reality_check']['single_p_ic'][k]:.2f}" for g in res) + ")"
+                                 for k in leads)
+                     + "。这是比单组最好成绩更可靠的线索,但单独检验的 p 值需要都 <0.05 才算站得住。")
+    head = ("<p class='verdict'><b>结论:有希望,值得继续跟踪。</b>至少两组在事先选定模型和全模型运气检验下都站得住。</p>"
             if promising else
-            "<p class='verdict'><b>结论:目前不能算有希望。</b>扩大数据、换了 17 种模型之后,上一轮看到的 30 分钟信号没有稳定出现,"
+            "<p class='verdict'><b>结论:目前不能算有希望。</b>扩大数据、换了 17 种模型之后,上一轮看到的 30 分钟信号没有在第二组数据里重现,"
             "最好的结果也通不过运气检验。</p>")
     return head + "<ul class='concl'>" + "".join(f"<li>{x}</li>" for x in lines) + "</ul>"
 
@@ -52,12 +63,13 @@ def _model_table(s):
                     f"<td>{_num(s['cv_scores'][name])}</td>"
                     f"<td class='{_c(m['ic'])}'>{_num(m['ic'])}</td><td>{_num(m['ic_t'], 2)}</td>"
                     f"<td>{_pct(m['hit'])}</td><td class='{_c(m['hit_edge'])}'>{m['hit_edge'] * 100:+.1f}</td>"
-                    f"<td>{_num(m['hit_p'], 3)}</td><td>{m['edge_bp']:+.2f}</td>"
+                    f"<td>{_num(m['hit_p'], 3)}</td><td>{_num(s['reality_check']['single_p_ic'][name], 3)}</td>"
+                    f"<td>{m['edge_bp']:+.2f}</td>"
                     + (f"<td>{_num(m['xs_ic'])}</td><td>{_num(m['xs_ic_t'], 2)}</td>" if "xs_ic" in m else "")
                     + "</tr>")
     xs = "xs_ic" in next(iter(s["models"].values()))
     head = ("<tr><th>模型</th><th>类型</th><th>训练期 CV IC</th><th>样本外 IC</th><th>IC t</th><th>命中率</th>"
-            "<th>超出基准(百分点)</th><th>p 值</th><th>每笔超额 bp</th>"
+            "<th>超出基准(百分点)</th><th>命中 p</th><th>IC p(按天聚类)</th><th>每笔超额 bp</th>"
             + ("<th>截面 IC</th><th>截面 t</th>" if xs else "") + "</tr>")
     rc = s["reality_check"]
     first = next(iter(s["models"].values()))
@@ -74,11 +86,12 @@ def _stock_table(c):
         f"<tr><td>{t}</td><td class='{_c(d[pick]['ic'])}'>{_num(d[pick]['ic'])}</td><td>{_num(d[pick]['ic_t'], 2)}</td>"
         f"<td class='{_c(d[pick]['hit_edge'])}'>{d[pick]['hit_edge'] * 100:+.1f}</td>"
         f"<td class='{_c(d['lgbm_small']['ic'])}'>{_num(d['lgbm_small']['ic'])}</td>"
-        f"<td class='{_c(d['lgbm_small']['hit_edge'])}'>{d['lgbm_small']['hit_edge'] * 100:+.1f}</td></tr>"
+        f"<td class='{_c(d['lgbm_small']['hit_edge'])}'>{d['lgbm_small']['hit_edge'] * 100:+.1f}</td>"
+        f"<td class='{_c(d['rule_reversal']['ic'])}'>{_num(d['rule_reversal']['ic'])}</td></tr>"
         for t, d in c["per_stock"].items())
     return (f"<h2>合并模型在每只股票上的表现</h2><div class='card tw'><table>"
-            f"<tr><th></th><th class='grp' colspan='3'>CV 选出的「{LABEL[pick]}」</th><th class='grp' colspan='2'>LightGBM 小(上一轮 NVDA 选的)</th></tr>"
-            "<tr><th>股票</th><th>IC</th><th>IC t</th><th>命中率超出</th><th>IC</th><th>命中率超出</th></tr>"
+            f"<tr><th></th><th class='grp' colspan='3'>CV 选出的「{LABEL[pick]}」</th><th class='grp' colspan='2'>LightGBM 小(上一轮 NVDA 选的)</th><th class='grp'>规则:短期反转</th></tr>"
+            "<tr><th>股票</th><th>IC</th><th>IC t</th><th>命中率超出</th><th>IC</th><th>命中率超出</th><th>IC</th></tr>"
             f"{rows}</table></div>")
 
 
@@ -95,7 +108,8 @@ def build(res, cost, path):
 <h2>怎么读</h2>
 <p class="note">训练期 CV IC = 只用训练期数据做交叉验证的成绩,用来事先选模型(★),这是唯一不受"挑结果"影响的数字。
 其他模型的样本外成绩只是参考:模型越多,总会有几个碰巧好看。运气检验(White Reality Check,按交易日分块自助法 1000 次)
-回答的就是"在这么多模型里,最好的那个有多大可能纯靠运气"。p 值和 IC t 用有效样本(5 分钟组的 30 分钟收益互相重叠,按 ÷6 计)。
+回答的就是"在这么多模型里,最好的那个有多大可能纯靠运气"。命中 p 和 IC t 用有效样本(5 分钟组的 30 分钟收益互相重叠,按 ÷6 计);IC p(按天聚类)是单个模型按交易日分块自助法的 p 值,
+它考虑了同一天里各股票、各时段一起波动,比 IC t 更保守。预测为 0 的时点(规则模型只在特定时段出手)不计入命中率。
 每笔超额 = 按预测方向交易一次的平均收益减一直持有,未扣成本(来回约 {cost:g}bp)。截面 IC = 同一时刻 9 只股票之间的排序能力。
 不构成投资建议。</p>
 </main></body></html>"""
