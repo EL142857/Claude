@@ -66,14 +66,17 @@ def _third_friday(d):
     return d.weekday() == 4 and 15 <= d.day <= 21
 
 
-def build(interval, daily_mu=None, refresh=True):
+def build(interval, daily_mu=None, refresh=True, target="NVDA", ahead=1):
     """Features at each bar close and the next-bar log return as target.
 
     Rows whose next bar is in another session, or is a shortened bar (the
-    15:30 60m bar only lasts 30 minutes), are not used as targets."""
+    15:30 60m bar only lasts 30 minutes), are not used as targets.
+
+    `target` is the stock to forecast (NVDA by default); `ahead` is the
+    horizon in bars (e.g. 6 five-minute bars = 30 minutes)."""
     mins = INTERVALS[interval][0]
-    bars = {t: load(t, interval, refresh) for t in TICKERS}
-    nv = bars["NVDA"]
+    bars = {t: load(t, interval, refresh) for t in dict.fromkeys(TICKERS + [target])}
+    nv = bars[target]
     idx = nv.index
     c = nv["Close"]
     close = {t: b["Close"].reindex(idx, method="ffill") for t, b in bars.items()}
@@ -126,7 +129,7 @@ def build(interval, daily_mu=None, refresh=True):
     F["dow"] = pd.Series(idx.dayofweek, index=idx).astype(float)
     F["opex_day"] = pd.Series([float(_third_friday(d)) for d in idx], index=idx)
     try:
-        e = load_earnings_for("NVDA")
+        e = load_earnings_for(target)
         react = set((pd.DatetimeIndex(e) + pd.offsets.BDay(1)).normalize())
         F["earnings_reaction_day"] = date.isin(react).astype(float)
     except Exception:
@@ -136,11 +139,11 @@ def build(interval, daily_mu=None, refresh=True):
         F["daily_model_mu"] = date.map(daily_mu.shift(1).reindex(sorted(set(date.values))).to_dict())
 
     X = pd.DataFrame(F).replace([np.inf, -np.inf], np.nan)
-    nxt_same = date.shift(-1).eq(date)
-    nxt_start = pd.Series(idx, index=idx).shift(-1)
+    nxt_same = date.shift(-ahead).eq(date)
+    nxt_start = pd.Series(idx, index=idx).shift(-ahead)
     nxt_full = ((np.minimum(nxt_start.dt.hour * 60 + nxt_start.dt.minute + mins, 960)
                  - (nxt_start.dt.hour * 60 + nxt_start.dt.minute)) == mins)
-    y = np.log(c.shift(-1) / c).where(nxt_same & nxt_full)
+    y = np.log(c.shift(-ahead) / c).where(nxt_same & nxt_full)
     return X, y, c, pd.Series(slot, index=idx)
 
 
