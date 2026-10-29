@@ -12,10 +12,36 @@ def _c(x):
     return "good" if x > 0 else "bad"
 
 
+def _rule_lead(res):
+    """A no-fitting rule that is the best IC model on NVDA, survives the
+    all-model reality check there, and is significant on its own in the pool."""
+    a, c = res["A"], res["C"]
+    k = a["reality_check"]["best_ic_model"]
+    if not (k.startswith("rule") and a["reality_check"]["rc_p_ic"] < 0.05
+            and c["reality_check"]["single_p_ic"][k] < 0.05):
+        return None, ""
+    st = res.get("_stability", {})
+    n = st.get("NVDA", {})
+    ma, mc = a["models"][k], c["models"][k]
+    pos = sum(d["halves"]["first"]["ic"] > 0 and d["halves"]["second"]["ic"] > 0 for d in st.values())
+    wk = n.get("weekly_ic", [])
+    txt = (f"<b>真正的线索是一个不用训练的简单规则:「{LABEL[k]}」</b>(下一个 30 分钟押注上一个 30 分钟的反方向)。"
+           f"NVDA 样本外 IC {ma['ic']:+.3f},命中率 {_pct(ma['hit'])}(基准 {_pct(ma['base'])},p={ma['hit_p']:.3f}),"
+           f"每笔超额 {ma['edge_bp']:+.1f}bp,远高于约 0.5bp 的价差成本;在 17 个模型里做运气检验仍有 p={a['reality_check']['rc_p_ic']:.3f}。"
+           f"9 只股票合并 IC {mc['ic']:+.3f}(单独检验 p={c['reality_check']['single_p_ic'][k]:.3f}),但每笔只有 {mc['edge_bp']:+.1f}bp。")
+    if n:
+        h1, h2 = n["halves"]["first"], n["halves"]["second"]
+        txt += (f" 规则不需要训练,所以全部 60 天都是样本外:NVDA 前一半 IC {h1['ic']:+.3f}、后一半 {h2['ic']:+.3f};"
+                f"按周看 {sum(x > 0 for x in wk)}/{len(wk)} 周为正;9 只股票里前后两半都为正的有 {pos} 只。")
+    return k, txt
+
+
 def _verdict(res):
     a, b, c = res["A"], res["B"], res["C"]
     lines = []
     for k, s in res.items():
+        if k.startswith("_"):
+            continue
         p = s["models"][s["cv_pick"]]
         rc = s["reality_check"]
         sig = p["hit_p"] < 0.05 or abs(p["ic_t"]) >= 2
@@ -25,8 +51,9 @@ def _verdict(res):
             + ("" if sig else ",不显著")
             + f"。全部 {len(s['models'])} 个模型里最好的那个能否用运气解释:命中率 p={rc['rc_p_hit']:.2f}、IC p={rc['rc_p_ic']:.2f}"
             + ("(都没过 0.05,最好的结果也可能是运气)。" if min(rc['rc_p_hit'], rc['rc_p_ic']) >= 0.05 else "。"))
-    pos = {k: sum(m["ic"] > 0 for m in s["models"].values()) for k, s in res.items()}
-    lines.append("<b>多少模型的样本外 IC 为正:</b>" + "、".join(f"{k} 组 {pos[k]}/{len(res[k]['models'])}" for k in res)
+    groups = {k: s for k, s in res.items() if not k.startswith("_")}
+    pos = {k: sum(m["ic"] > 0 for m in s["models"].values()) for k, s in groups.items()}
+    lines.append("<b>多少模型的样本外 IC 为正:</b>" + "、".join(f"{k} 组 {pos[k]}/{len(groups[k]['models'])}" for k in groups)
                  + "。如果真有稳定信号,大部分合理的模型都应该能抓到一些。")
     ps = c.get("per_stock", {})
     if ps:
@@ -38,19 +65,25 @@ def _verdict(res):
         p, rc = s["models"][s["cv_pick"]], s["reality_check"]
         return ((p["hit_p"] < 0.05 and rc["rc_p_hit"] < 0.05 and rc["best_hit_model"] == s["cv_pick"])
                 or (rc["single_p_ic"][s["cv_pick"]] < 0.05 and rc["rc_p_ic"] < 0.05))
-    promising = sum(passes(s) for s in res.values()) >= 2      # must replicate in a second setup
+    promising = sum(passes(s) for s in groups.values()) >= 2      # must replicate in a second setup
     # leads: positive in the training-period CV *and* out of sample, in every setup
-    leads = [k for k in MODELS if all((s["cv_scores"][k] or 0) > 0 and s["models"][k]["ic"] > 0 for s in res.values())]
+    leads = [k for k in MODELS if all((s["cv_scores"][k] or 0) > 0 and s["models"][k]["ic"] > 0 for s in groups.values())]
     if leads:
         lines.append("<b>在三组里训练期和样本外 IC 都为正的模型:</b>"
-                     + "、".join(f"{LABEL[k]}(样本外 IC " + " / ".join(f"{res[g]['models'][k]['ic']:+.3f}" for g in res)
-                                 + ",单独检验 p " + " / ".join(f"{res[g]['reality_check']['single_p_ic'][k]:.2f}" for g in res) + ")"
+                     + "、".join(f"{LABEL[k]}(样本外 IC " + " / ".join(f"{groups[g]['models'][k]['ic']:+.3f}" for g in groups)
+                                 + ",单独检验 p " + " / ".join(f"{groups[g]['reality_check']['single_p_ic'][k]:.2f}" for g in groups) + ")"
                                  for k in leads)
                      + "。这是比单组最好成绩更可靠的线索,但单独检验的 p 值需要都 <0.05 才算站得住。")
-    head = ("<p class='verdict'><b>结论:有希望,值得继续跟踪。</b>至少两组在事先选定模型和全模型运气检验下都站得住。</p>"
-            if promising else
-            "<p class='verdict'><b>结论:目前不能算有希望。</b>扩大数据、换了 17 种模型之后,上一轮看到的 30 分钟信号没有在第二组数据里重现,"
-            "最好的结果也通不过运气检验。</p>")
+    lead, lead_txt = _rule_lead(res)
+    if promising:
+        head = "<p class='verdict'><b>结论:有希望,值得继续跟踪。</b>至少两组在事先选定模型和全模型运气检验下都站得住。</p>"
+    elif lead:
+        head = ("<p class='verdict'><b>结论:上一轮那个 LightGBM 信号不成立,但找到了一个更可靠、值得继续跟踪的线索。</b></p>"
+                f"<p>{lead_txt}</p><p class='note'>它还不能算已证实:只有约 60 天、一种市场环境;短期反转是学术上已知的现象,"
+                "强弱会随市场变化;按 K 线收盘价成交也比真实成交乐观。下一步最干净的检验是:规则固定不动,只看之后新增的数据。</p>")
+    else:
+        head = ("<p class='verdict'><b>结论:目前不能算有希望。</b>扩大数据、换了 17 种模型之后,上一轮看到的 30 分钟信号没有在第二组数据里重现,"
+                "最好的结果也通不过运气检验。</p>")
     return head + "<ul class='concl'>" + "".join(f"<li>{x}</li>" for x in lines) + "</ul>"
 
 
@@ -103,7 +136,7 @@ def build(res, cost, path):
 <p class="sub">上一轮 NVDA 30 分钟预测的命中率比基准高 5.8 个百分点(p=0.015),但样本只有一个月。这里用三种方式扩大数据、
 换 {len(MODELS)} 种模型重新检验。所有组都用同一个样本外区间(数据的后一半),每组分 10 段滚动重训。</p>
 <div class="card">{_verdict(res)}</div>
-{''.join(_model_table(s) for s in res.values())}
+{''.join(_model_table(s) for k, s in res.items() if not k.startswith("_"))}
 {_stock_table(res['C']) if res['C'].get('per_stock') else ''}
 <h2>怎么读</h2>
 <p class="note">训练期 CV IC = 只用训练期数据做交叉验证的成绩,用来事先选模型(★),这是唯一不受"挑结果"影响的数字。

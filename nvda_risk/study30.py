@@ -9,7 +9,8 @@ For every setup, all models in zoo.MODELS are run walk-forward. The honest
 number is the model picked by CV on the training half only. A day-block
 bootstrap "reality check" asks whether the best of all models could be luck.
 
-  python study30.py   -> output/study30.{json,html}
+  python study30.py                 -> output/study30.{json,html}
+  python study30.py --report-only   rebuild the page from saved results
 """
 import json
 from pathlib import Path
@@ -144,6 +145,31 @@ def reality_check(preds, S, seed=0):
             "single_p_ic": {k: float(np.mean(np.array(each_ic)[:, i] >= obs_ic[i])) for i, k in enumerate(names)}}
 
 
+def rule_stability(name="rule_reversal", interval="30m"):
+    """A rule has no training, so every day is out of sample: IC and edge in each
+    half of the data and in every week, for NVDA and each stock in the pool."""
+    out = {}
+    for t in UNIVERSE:
+        X, y, c, _ = intraday.build(interval, refresh=False, target=t)
+        ok = y.notna()
+        X, y = X[ok], y[ok]
+        mu = zoo.make(name).predict(X)
+        d = X.index.normalize()
+        ud = np.sort(d.unique())
+        halves = {}
+        for lab, sel in (("first", d < ud[len(ud) // 2]), ("second", d >= ud[len(ud) // 2])):
+            sel = np.asarray(sel)
+            act = sel & (mu != 0) & (y.values != 0)
+            halves[lab] = {"ic": float(stats.spearmanr(mu[sel], y[sel]).statistic),
+                           "hit": float((np.sign(mu[act]) == np.sign(y.values[act])).mean()),
+                           "edge_bp": float(((np.sign(mu[sel]) * y.values[sel]).mean() - y.values[sel].mean()) * 1e4)}
+        wk = X.index.to_period("W")
+        weekly = [float(stats.spearmanr(mu[np.asarray(wk == w)], y[np.asarray(wk == w)]).statistic)
+                  for w in wk.unique() if (wk == w).sum() >= 20]
+        out[t] = {"halves": halves, "weekly_ic": weekly}
+    return out
+
+
 def main():
     daily_mu = pd.read_csv(OUT / "tuned_fc_daily_h1.csv", index_col=0, parse_dates=True)["mu"]
     setups = {
@@ -180,6 +206,7 @@ def main():
                     "cv_pick": pick, "cv_scores": cv, "models": table, "reality_check": rc, "per_stock": per_stock}
         print(f"   CV pick {pick}: IC {table[pick]['ic']:+.3f}, hit edge {table[pick]['hit_edge'] * 100:+.1f}pp; "
               f"reality check p(hit)={rc['rc_p_hit']:.3f} p(IC)={rc['rc_p_ic']:.3f}")
+    res["_stability"] = rule_stability()
     (OUT / "study30.json").write_text(json.dumps(res, indent=2, default=float, ensure_ascii=False))
     import study30_report
     study30_report.build(res, COST_BP, OUT / "study30.html")
@@ -187,4 +214,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--report-only" in sys.argv:                 # rebuild the page from saved results
+        import study30_report
+        res = json.loads((OUT / "study30.json").read_text())
+        res["_stability"] = rule_stability()
+        (OUT / "study30.json").write_text(json.dumps(res, indent=2, default=float, ensure_ascii=False))
+        study30_report.build(res, COST_BP, OUT / "study30.html")
+    else:
+        main()

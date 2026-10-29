@@ -115,3 +115,16 @@ python horizon_tuned.py   # 每个预测期在自己的训练期内交叉验证�
 候选模型(`tuning.py`):Ridge、LightGBM 小/中/大、Ridge+LightGBM 混合(小/中/大),按各预测期训练期内清洗过的滚动交叉验证 IC 选择。
 结果与"所有预测期用同一套设置"的版本并列对比,并对 8 个预测期做 Bonferroni 多重检验校正。
 
+## 30 分钟信号检验(`study30.py`)
+
+```bash
+python study30.py                 # 3 组数据 × 17 种模型 + 交叉验证选模型 + 运气检验(约 15 分钟)
+python study30.py --report-only   # 用已保存结果重建 output/study30.html
+```
+
+- 数据:A = NVDA 30 分钟 K 线;B = NVDA 5 分钟 K 线预测未来 30 分钟;C = 9 只科技股合并 30 分钟 K 线
+- 模型(`zoo.py`):4 条不用训练的规则(短期反转/动量、开盘动量→收盘、跟随 QQQ)、Ridge/Lasso/ElasticNet/逻辑回归、
+  LightGBM 小中大、随机森林、极端随机树、HistGB、MLP、两种组合
+- 检验:只用训练期交叉验证事先选模型;White Reality Check(按交易日分块自助法)检验"最好的模型是否靠运气";
+  单个模型按天聚类的 p 值;规则模型前后两半和逐周的稳定性
+
