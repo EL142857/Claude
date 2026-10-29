@@ -7,8 +7,10 @@ Compares, under the same walk-forward protocol as run_panel.py:
   lgbm      : the pooled LightGBM from run_panel.py
 then bootstraps the hierarchical model's scenario responses.
 
-  python run_hier.py      (run run_panel.py first)
+  python run_hier.py           (run run_panel.py first)
+  python run_hier.py --reuse   reuse the saved CV choice and forecasts, redo the bootstrap
 """
+import argparse
 import json
 from pathlib import Path
 
@@ -47,13 +49,24 @@ def score(fc):
             "xs_rank_ic_t": float(xs_n.mean() / xs_n.std() * np.sqrt(len(xs_n)))}
 
 
-def main(out=OUT):
+def main(out=OUT, reuse=False):
     ohlcv, fred, nvda_earn, _ = data.load_all(extra=UNIVERSE)
     earnings = {t: data.load_earnings_for(t) for t in UNIVERSE}
     earnings["NVDA"] = earnings["NVDA"].union(nvda_earn)
     X, groups, y_norm, scale, y_raw, _ = panel.build_panel(ohlcv, fred, earnings)
     d = X.index.get_level_values("Date")
 
+    if reuse:
+        old = json.loads((out / "hier.json").read_text())
+        sel = {"alpha": old["alpha"], "c": old["c_cv"], "sep_alpha": old["sep_alpha"]}
+        cv_by_c, scores = {float(k): v for k, v in old["cv_mse_by_c"].items()}, old["scores"]
+        sel["sep_grid"] = {0: old["cv_mse_separate"]}
+    else:
+        sel, cv_by_c, scores = _select_and_score(X, y_norm, scale, y_raw, out)
+    _final(X, y_norm, scale, d, sel, cv_by_c, scores, out)
+
+
+def _select_and_score(X, y_norm, scale, y_raw, out):
     sel = ph.select(X, y_norm, TEST_START, H)
     print(f"CV choice: alpha={sel['alpha']:.0f}, c={sel['c']}  (separate alpha={sel['sep_alpha']:.0f})")
     cv_by_c = {c: min(v for (a, cc), v in sel["grid"].items() if cc == c) for c in ph.CS}
@@ -75,6 +88,10 @@ def main(out=OUT):
     lg = pd.read_csv(out / "forecast.csv", index_col=[0, 1], parse_dates=[0])
     scores["lgbm"] = score(lg)
     print(f"  lgbm      avg IC {scores['lgbm']['avg_ic']:+.4f}  R2 {scores['lgbm']['oos_r2_norm']:+.4f}")
+    return sel, cv_by_c, scores
+
+
+def _final(X, y_norm, scale, d, sel, cv_by_c, scores, out):
 
     # final hierarchical fit on all labelled data, scenario responses + bootstrap.
     # Use at least a small c so the stock-specific part is visible even if CV picked 0.
@@ -84,8 +101,8 @@ def main(out=OUT):
     m = ph.Hier(sel["alpha"], c_show).fit(X[lab], y_norm[lab])
     resp = ph.scenario_from_slopes(m.slopes(), m.sd, avg_scale)[UNIVERSE]
     draws = ph.bootstrap(X[lab], y_norm[lab], sel["alpha"], c_show, avg_scale)
-    arr = np.stack([dr[UNIVERSE].to_numpy() for dr in draws])           # draws x scen x stock
-    dev = arr - arr.mean(axis=2, keepdims=True)                          # stock-specific part
+    arr = np.stack([tot[UNIVERSE].to_numpy() for tot, _ in draws])      # draws x scen x stock
+    dev = np.stack([sp[UNIVERSE].to_numpy() for _, sp in draws])        # stock-specific part only
     lo, hi = np.percentile(arr, [5, 95], axis=0)
     dlo, dhi = np.percentile(dev, [5, 95], axis=0)
     frame = lambda a: pd.DataFrame(a, index=resp.index, columns=UNIVERSE)
@@ -112,4 +129,6 @@ def main(out=OUT):
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--reuse", action="store_true")
+    main(reuse=ap.parse_args().reuse)

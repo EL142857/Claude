@@ -16,10 +16,10 @@ GROUP_ZH = {
 
 EXTRA_CSS = """
 .chart.hm{height:560px}.chart.hm2{height:460px}
-:root{--div-neg:#e34948;--div-mid:#f0efec;--div-pos:#2a78d6;--seq-lo:#cde2fb;--seq-hi:#0d366b}
+:root{--div-neg:#e34948;--div-mid:#f0efec;--div-pos:#2a78d6;--seq-lo:#cde2fb;--seq-hi:#3987e5}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--div-neg:#e66767;--div-mid:#383835;
---div-pos:#3987e5;--seq-lo:#1a1a19;--seq-hi:#86b6ef}}
-:root[data-theme="dark"]{--div-neg:#e66767;--div-mid:#383835;--div-pos:#3987e5;--seq-lo:#1a1a19;--seq-hi:#86b6ef}
+--div-pos:#3987e5;--seq-lo:#1a1a19;--seq-hi:#256abf}}
+:root[data-theme="dark"]{--div-neg:#e66767;--div-mid:#383835;--div-pos:#3987e5;--seq-lo:#1a1a19;--seq-hi:#256abf}
 """
 
 JS = """
@@ -129,6 +129,7 @@ def _hier_section(hz, labels, cols):
     j, resp = hz["json"], hz["resp"][cols]
     lo, hi, dlo, dhi = (hz[k][cols] for k in ("lo", "hi", "dev_lo", "dev_hi"))
     sig_dev = (dlo > 0) | (dhi < 0)
+    mid = (dlo + dhi) / 2
     text = [[f"{resp.loc[k, c]:+.2f}{'*' if sig_dev.loc[k, c] else ''}" for c in cols] for k in resp.index]
     hover = [[f"90% 区间 {lo.loc[k, c]:+.2f} ~ {hi.loc[k, c]:+.2f}%<br>"
               f"个股特有部分 {dlo.loc[k, c]:+.2f} ~ {dhi.loc[k, c]:+.2f}%" for c in cols] for k in resp.index]
@@ -150,6 +151,7 @@ def _hier_section(hz, labels, cols):
         f"各股完全独立的模型 IC {sc['separate']['avg_ic']:+.3f},统一斜率 {sc['common']['avg_ic']:+.3f}。",
         f"<b>个股特有反应有多少是可信的:</b>{j['n_cells']} 个(冲击×股票)格子里,个股特有部分的 90% 自助区间不含 0 的有 "
         f"{j['sig_stock_specific_cells']} 个(图中标 *;纯随机约 {j['n_cells'] * 0.1:.0f} 个)。"
+        f"但这些个股特有部分最大也只有 {mid.abs().where(sig_dev).max().max():.3f}%/5 日,经济上可以忽略。"
         f"分层模型的个股差异格局和历史实测的一致性 {j['pattern_vs_history']:+.2f}。",
     ]
     if j["c_cv"] == 0:

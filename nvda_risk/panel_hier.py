@@ -153,8 +153,9 @@ def scenario_from_slopes(slopes, sd, avg_scale):
 
 def bootstrap(X, y, alpha, c, avg_scale, n=60, block="Q", seed=0):
     """Block bootstrap over calendar quarters (keeps autocorrelation inside a
-    block). Returns the bootstrap draws of the scenario-response matrix and of
-    its stock-specific part (response minus the cross-stock mean)."""
+    block). Returns draws of (total response, stock-specific response). The
+    stock-specific part uses only the deviation slopes d, so differences that
+    come purely from each stock's volatility are not counted as stock-specific."""
     rng = np.random.default_rng(seed)
     d = _dates(X)
     q = d.to_period(block)
@@ -165,5 +166,6 @@ def bootstrap(X, y, alpha, c, avg_scale, n=60, block="Q", seed=0):
         pick = rng.choice(uq, len(uq), replace=True)
         idx = np.concatenate([np.flatnonzero((q == p) & lab) for p in pick])
         m = Hier(alpha, c).fit(X.iloc[idx], y.iloc[idx])
-        draws.append(scenario_from_slopes(m.slopes(), m.sd, avg_scale))
+        draws.append((scenario_from_slopes(m.slopes(), m.sd, avg_scale),
+                      scenario_from_slopes(m.dev, m.sd, avg_scale)))
     return draws
