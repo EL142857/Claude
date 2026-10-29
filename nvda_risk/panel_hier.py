@@ -18,7 +18,7 @@ from sklearn.linear_model import Ridge
 
 from config import RETRAIN_EVERY, SCENARIOS, UNIVERSE
 
-ALPHAS = np.logspace(2, 5, 7)
+ALPHAS = np.logspace(3, 7, 9)
 CS = [0.0, 0.1, 0.25, 0.5, 1.0, 3.0]
 
 
