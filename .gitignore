@@ -1,3 +1,4 @@
 __pycache__/
 nvda_risk/data/raw/
 nvda_risk/output/
+nvda_risk/output_run.log

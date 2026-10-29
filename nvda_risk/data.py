@@ -29,6 +29,10 @@ def _yahoo_one(ticker, start):
         if len(df):
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
+            # drop today's bar while the US session is still open (partial volume/close)
+            now = pd.Timestamp.now(tz="America/New_York")
+            if now.hour < 17:
+                df = df[df.index < now.normalize().tz_localize(None)]
             return df[["Open", "High", "Low", "Close", "Volume"]]
         time.sleep(2 ** attempt)
     raise RuntimeError(f"no Yahoo data for {ticker}")
