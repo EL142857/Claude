@@ -57,13 +57,15 @@ def _cached(path, fetch):
     return df
 
 
-def load_all(start=START, refresh=False):
-    """Return (ohlcv dict, fred DataFrame, earnings dates, missing list)."""
+def load_all(start=START, refresh=False, extra=()):
+    """Return (ohlcv dict, fred DataFrame, earnings dates, missing list).
+
+    `extra` adds tickers beyond the NVDA factor universe (used by the panel model)."""
     if refresh:
         for f in RAW.glob("*.csv"):
             f.unlink()
     ohlcv, missing = {}, []
-    for t in YAHOO:
+    for t in list(YAHOO) + [x for x in extra if x not in YAHOO]:
         try:
             ohlcv[t] = _cached(RAW / f"yahoo_{_safe(t)}.csv", lambda t=t: _yahoo_one(t, start))
         except Exception as e:  # keep going: one missing factor should not kill the run
@@ -83,6 +85,23 @@ def load_all(start=START, refresh=False):
     fred = pd.DataFrame(fred)
 
     return ohlcv, fred, load_earnings(), missing
+
+
+def load_earnings_for(ticker):
+    """Earnings dates for one stock, cached. A pre-market report (before noon ET)
+    is moved to the previous day, so every date means "the reaction is the next session"."""
+    path = RAW / f"earnings_{_safe(ticker)}.csv"
+    if path.exists():
+        return pd.DatetimeIndex(pd.read_csv(path, parse_dates=["Date"])["Date"])
+    import yfinance as yf
+
+    ed = yf.Ticker(ticker).get_earnings_dates(limit=60)
+    ts = ed.index.tz_convert("America/New_York")
+    d = ts.tz_localize(None).normalize()
+    d = pd.DatetimeIndex([x - pd.offsets.BDay(1) if t.hour < 12 else x for x, t in zip(d, ts)])
+    d = d.sort_values().unique()
+    pd.DataFrame({"Date": d}).to_csv(path, index=False)
+    return d
 
 
 def load_earnings():

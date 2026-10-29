@@ -18,6 +18,49 @@ def _z(s, n=250):
     return (s - s.rolling(n, min_periods=n // 2).mean()) / s.rolling(n, min_periods=n // 2).std()
 
 
+def fred_block(fred, idx, add):
+    """Rates, credit and liquidity features, each lagged by its publication delay."""
+    if len(fred):
+        fr = fred.copy()
+        fr.index = pd.to_datetime(fr.index)
+        fr = fr.reindex(fr.index.union(idx)).ffill().reindex(idx)
+        for s, (group, _, lag) in FRED.items():
+            if s in fr:
+                fr[s] = fr[s].shift(lag)
+        if {"DGS10", "DGS2"} <= set(fr):
+            add("curve_10y2y", fr["DGS10"] - fr["DGS2"], "rates")
+        for s in ("DGS10", "DFII10", "T10YIE", "DGS2"):
+            if s in fr:
+                add(f"{s}_chg5", fr[s].diff(5), "rates")
+                add(f"{s}_chg20", fr[s].diff(20), "rates")
+        if "DFII10" in fr:
+            add("real_yield_lvl", fr["DFII10"], "rates")
+        if "BAMLH0A0HYM2" in fr:
+            add("hy_oas_z", _z(fr["BAMLH0A0HYM2"]), "credit")
+            add("hy_oas_chg5", fr["BAMLH0A0HYM2"].diff(5), "credit")
+        if "BAA10Y" in fr:
+            add("baa_spread_z", _z(fr["BAA10Y"]), "credit")
+            add("baa_spread_chg5", fr["BAA10Y"].diff(5), "credit")
+        if "NFCI" in fr:
+            add("nfci", fr["NFCI"], "credit")
+        if {"WALCL", "RRPONTSYD", "WTREGEN"} <= set(fr):
+            # Net liquidity = Fed balance sheet - reverse repo - TGA (all $bn)
+            net = fr["WALCL"] / 1e3 - fr["RRPONTSYD"] - fr["WTREGEN"] / 1e3
+            add("net_liq_chg20", net.diff(20) / net.shift(20), "liquidity")
+            add("net_liq_z", _z(net), "liquidity")
+
+
+def earnings_block(idx, earnings, add):
+    """Earnings calendar (dates are announced in advance, so not leakage)."""
+    pos = pd.Series(np.arange(len(idx)), index=idx)
+    e_pos = pos.reindex(pd.DatetimeIndex(earnings)[pd.DatetimeIndex(earnings).isin(idx)]).values
+    nxt = np.array([e_pos[e_pos >= p].min() if (e_pos >= p).any() else np.nan for p in pos.values])
+    days_to = pd.Series(nxt - pos.values, index=idx)
+    add("days_to_earnings", days_to.clip(upper=70).fillna(70), "events")
+    for h in HORIZONS:
+        add(f"earnings_in_next{h}", (days_to < h).astype(int), "events")
+
+
 def build(ohlcv, fred, earnings):
     nv = ohlcv[TARGET]
     idx = nv.index
@@ -61,32 +104,7 @@ def build(ohlcv, fred, earnings):
         spx_rv = np.log(close["^GSPC"]).diff().rolling(20).std() * qf.ANN * 100
         add("vrp", close["^VIX"] - spx_rv, "volatility")  # variance risk premium / hedging demand
 
-    # --- Rates, credit, liquidity from FRED (lagged to publication) ---
-    if len(fred):
-        fr = fred.copy()
-        fr.index = pd.to_datetime(fr.index)
-        fr = fr.reindex(fr.index.union(idx)).ffill().reindex(idx)
-        for s, (group, _, lag) in FRED.items():
-            if s in fr:
-                fr[s] = fr[s].shift(lag)
-        if {"DGS10", "DGS2"} <= set(fr):
-            add("curve_10y2y", fr["DGS10"] - fr["DGS2"], "rates")
-        for s in ("DGS10", "DFII10", "T10YIE", "DGS2"):
-            if s in fr:
-                add(f"{s}_chg5", fr[s].diff(5), "rates")
-                add(f"{s}_chg20", fr[s].diff(20), "rates")
-        if "DFII10" in fr:
-            add("real_yield_lvl", fr["DFII10"], "rates")
-        if "BAMLH0A0HYM2" in fr:
-            add("hy_oas_z", _z(fr["BAMLH0A0HYM2"]), "credit")
-            add("hy_oas_chg5", fr["BAMLH0A0HYM2"].diff(5), "credit")
-        if "NFCI" in fr:
-            add("nfci", fr["NFCI"], "credit")
-        if {"WALCL", "RRPONTSYD", "WTREGEN"} <= set(fr):
-            # Net liquidity = Fed balance sheet - reverse repo - TGA (all $bn)
-            net = fr["WALCL"] / 1e3 - fr["RRPONTSYD"] - fr["WTREGEN"] / 1e3
-            add("net_liq_chg20", net.diff(20) / net.shift(20), "liquidity")
-            add("net_liq_z", _z(net), "liquidity")
+    fred_block(fred, idx, add)
 
     # --- Quant / systematic fund behaviour ---
     cta_n = qf.cta_trend(c)
@@ -120,14 +138,7 @@ def build(ohlcv, fred, earnings):
     for k, v in qf.microstructure(nv["Open"], nv["High"], nv["Low"], nv["Close"], nv["Volume"]).items():
         add(k, v, "quant_flows")
 
-    # --- Earnings calendar (dates are announced in advance, so not leakage) ---
-    pos = pd.Series(np.arange(len(idx)), index=idx)
-    e_pos = pos.reindex(pd.DatetimeIndex(earnings)[pd.DatetimeIndex(earnings).isin(idx)]).values
-    nxt = np.array([e_pos[e_pos >= p].min() if (e_pos >= p).any() else np.nan for p in pos.values])
-    days_to = pd.Series(nxt - pos.values, index=idx)
-    add("days_to_earnings", days_to.clip(upper=70).fillna(70), "events")
-    for h in HORIZONS:
-        add(f"earnings_in_next{h}", (days_to < h).astype(int), "events")
+    earnings_block(idx, earnings, add)
 
     X = pd.DataFrame(F).replace([np.inf, -np.inf], np.nan)
     groups = pd.Series(G)

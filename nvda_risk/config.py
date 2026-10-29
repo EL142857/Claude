@@ -58,7 +58,8 @@ FRED = {
     "DFII10": ("rates", "10y real yield (TIPS)", 1),
     "T10YIE": ("rates", "10y breakeven inflation", 1),
     "DFF": ("rates", "Effective fed funds", 1),
-    "BAMLH0A0HYM2": ("credit", "HY OAS spread", 1),
+    "BAMLH0A0HYM2": ("credit", "HY OAS spread (FRED keeps only ~3y of history)", 1),
+    "BAA10Y": ("credit", "Moody's Baa minus 10y Treasury (full history)", 1),
     "NFCI": ("credit", "Chicago Fed financial conditions (weekly)", 6),
     "WALCL": ("liquidity", "Fed balance sheet (weekly)", 6),
     "RRPONTSYD": ("liquidity", "Overnight reverse repo", 1),
@@ -88,3 +89,29 @@ MAIN_HORIZON = 5
 TEST_START = "2024-01-01"      # out-of-sample period starts here
 RETRAIN_EVERY = 21             # walk-forward refit cadence (trading days)
 MIN_TRAIN = 750                # ~3 years before the first fit
+
+# --- Panel model: one pooled model over several mega-cap tech stocks ---
+UNIVERSE = ["NVDA", "AMD", "AVGO", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"]
+PANEL_HORIZON = 5
+
+# Shock scenarios fed through the trained panel model. Each entry moves the
+# listed features by (sign x 1 training std) at the same time; a feature given
+# as ("set", a, b) is instead switched from value a to value b.
+SCENARIOS = {
+    "vol_spike": ("波动率飙升", {"^VIX_lvl_z": 1, "^VIX_chg5": 1, "vix_term": 1, "^VVIX_lvl_z": 1}),
+    "rates_up": ("长端利率上行", {"DGS10_chg5": 1, "DGS10_chg20": 1, "DFII10_chg5": 1, "DFII10_chg20": 1}),
+    "credit_tight": ("信用收紧", {"baa_spread_z": 1, "baa_spread_chg5": 1, "nfci": 1}),
+    "liquidity_drain": ("美联储流动性收缩", {"net_liq_chg20": -1, "net_liq_z": -1}),
+    "dollar_up": ("美元走强", {"DX-Y.NYB_ret5": 1, "DX-Y.NYB_ret20": 1}),
+    "china_taiwan": ("中国/台湾风险", {"FXI_ret5": -1, "EWT_ret5": -1, "TWD=X_ret5": 1, "CNY=X_ret5": 1}),
+    "semis_rally": ("半导体板块走强", {"SMH_ret5": 1, "SMH_ret20": 1}),
+    "supply_chain_rally": ("供应链(TSM/ASML/MU)走强", {"TSM_ret5": 1, "ASML_ret5": 1, "MU_ret5": 1}),
+    "cta_ndx_sell": ("CTA 抛售纳指", {"cta_ndx_flow5": -1, "cta_ndx_pos": -1}),
+    "volctl_sell": ("波动率目标基金减仓", {"volctl_flow5": -1, "volctl_expo": -1}),
+    "riskpar_delever": ("风险平价去杠杆", {"riskpar_flow5": -1, "riskpar_lev": -1}),
+    "momentum_crash": ("动量因子崩盘", {"mom_drawdown": -1, "mom_spread20": -1}),
+    "stock_cta_sell": ("个股 CTA 仓位下降", {"cta_pos": -1, "cta_flow5": -1}),
+    "statarb_overbought": ("个股相对大盘超涨(统计套利)", {"resid5_z": 1, "resid20_z": 1}),
+    "opex_week": ("期权到期周", {"opex_week": ("set", 0, 1)}),
+    "earnings_ahead": ("5日内有财报", {"earnings_in_next5": ("set", 0, 1)}),
+}
