@@ -144,7 +144,12 @@ def build(interval, daily_mu=None, refresh=True):
     return X, y, c, pd.Series(slot, index=idx)
 
 
-def walk_forward(X, y, slot, test_frac=0.5):
+def test_start(X, test_frac=0.5):
+    dates = X.index.normalize().unique().sort_values()
+    return dates[int(len(dates) * (1 - test_frac))]
+
+
+def walk_forward(X, y, slot, test_frac=0.5, config=None):
     """Expanding-window refits at N_CHUNKS date boundaries over the test half.
 
     Risk band: realised vol of de-seasonalised bar returns, times the next
@@ -160,7 +165,11 @@ def walk_forward(X, y, slot, test_frac=0.5):
         start, stop = ch[0], ch[-1] + pd.Timedelta(days=1)
         tr = (X.index < start) & y.notna().values
         te = (X.index >= start) & (X.index < stop)
-        keep, ridge, gbm = _fit_return_models(X[tr], y[tr])
+        if config is None:
+            keep, ridge, gbm = _fit_return_models(X[tr], y[tr])
+        else:                                       # per-horizon model chosen by tuning.select
+            import tuning
+            fitted = tuning.Fitted(config, X[tr], y[tr])
         # seasonal size of a bar by slot, from training only
         s_slot = y[tr].abs().groupby(slot[tr]).mean()
         s_all = y[tr].abs().mean()
@@ -171,9 +180,12 @@ def walk_forward(X, y, slot, test_frac=0.5):
         sigma = rv * seas.reindex(nxt.values).set_axis(nxt.index).values
         z = ((y[tr] - y[tr].mean()) / sigma[tr]).dropna()
         q = np.nanquantile(z, [0.025, 0.10, 0.90, 0.975])
-        Xb = X.loc[te, keep]
-        pr, pg = ridge.predict(Xb), gbm.predict(Xb)
-        f = pd.DataFrame({"mu": 0.5 * (pr + pg), "sigma": sigma[te].values,
+        if config is None:
+            Xb = X.loc[te, keep]
+            mu = 0.5 * (ridge.predict(Xb) + gbm.predict(Xb))
+        else:
+            mu = fitted.predict(X.loc[te])
+        f = pd.DataFrame({"mu": mu, "sigma": sigma[te].values,
                           "train_mean": y[tr].mean()}, index=X.index[te])
         for name, qq in zip(("band_q025", "band_q10", "band_q90", "band_q975"), q):
             f[name] = f["mu"] + qq * f["sigma"]

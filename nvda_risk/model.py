@@ -58,7 +58,7 @@ def _vol_design(X, r1):
     return d
 
 
-def walk_forward(X, y, r1, test_start, h, cols=None):
+def walk_forward(X, y, r1, test_start, h, cols=None, config=None):
     """Return a DataFrame of out-of-sample forecasts for horizon h."""
     cols = X.columns if cols is None else cols
     X = X[cols]
@@ -79,7 +79,11 @@ def walk_forward(X, y, r1, test_start, h, cols=None):
         tr = tr[valid.reindex(tr).values]
         if len(tr) < MIN_TRAIN:
             continue
-        keep, ridge, gbm = _fit_return_models(X.loc[tr], y.loc[tr])
+        if config is None:
+            keep, ridge, gbm = _fit_return_models(X.loc[tr], y.loc[tr])
+        else:                                            # per-horizon model chosen by tuning.select
+            import tuning
+            fitted = tuning.Fitted(config, X.loc[tr], y.loc[tr])
         Vtr = V.loc[tr].dropna()
         vtr_y = fwd_vol.reindex(Vtr.index)
         ok = vtr_y.notna()
@@ -92,11 +96,16 @@ def walk_forward(X, y, r1, test_start, h, cols=None):
         z = (y.loc[tr].values - y.loc[tr].mean()) / sig_tr
         q = np.nanquantile(z, [0.025, 0.10, 0.90, 0.975])
 
-        Xb = X.loc[block, keep]
-        pr, pg = ridge.predict(Xb), gbm.predict(Xb)
+        if config is None:
+            Xb = X.loc[block, keep]
+            pr, pg = ridge.predict(Xb), gbm.predict(Xb)
+            mu = 0.5 * (pr + pg)
+        else:
+            mu = fitted.predict(X.loc[block])
+            pr = pg = np.full(len(block), np.nan)
         sig = np.exp(vol_model.predict(V.loc[block].fillna(V.loc[tr].median())))
         out.append(pd.DataFrame({
-            "ridge": pr, "lgbm": pg, "mu": 0.5 * (pr + pg), "sigma": sig,
+            "ridge": pr, "lgbm": pg, "mu": mu, "sigma": sig,
             "q025": q[0], "q10": q[1], "q90": q[2], "q975": q[3],
             "train_mean": y.loc[tr].mean(),
         }, index=block))

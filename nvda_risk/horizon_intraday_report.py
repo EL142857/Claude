@@ -48,14 +48,29 @@ def _conclusions(t, cost):
     return "".join(f"<li>{x}</li>" for x in out)
 
 
+def _tuned_conclusion(t):
+    from tuning import LABEL_ZH
+    r = t.dropna(subset=["n"])
+    picks = "、".join(f"{x['label']} → {LABEL_ZH[x['config']]}" for _, x in r.iterrows())
+    better = r[r["ic"] > r["ic_shared"]]
+    return (f"<b>每个预测期独立选模型、独立训练:</b>{picks}。和之前所有预测期用同一套设置相比,"
+            f"IC 变高的有 {len(better)}/{len(r)} 个预测期,平均 IC 从 {r['ic_shared'].mean():+.3f} 变为 {r['ic'].mean():+.3f}。"
+            "选模型只用了各自训练期的数据,所以这个对比本身也是样本外的。")
+
+
 def build(t, cost, path):
+    tuned = "config" in t.columns
+    if tuned:
+        from tuning import LABEL_ZH
     rows = []
     for _, r in t.iterrows():
         if np.isnan(r.get("n", np.nan)):
-            rows.append(f"<tr><td class='h'>{r['label']}</td><td class='na' colspan='13'>{r['data']}</td></tr>")
+            rows.append(f"<tr><td class='h'>{r['label']}</td><td class='na' colspan='{14 if tuned else 13}'>"
+                        f"{r['data']}</td></tr>")
             continue
+        sub = r["data"] + (f" · {LABEL_ZH[r['config']]} · 重训 {int(r['n_refits'])} 次" if tuned else "")
         rows.append(
-            f"<tr><td class='h'>{r['label']}<small>{r['data']}</small></td>"
+            f"<tr><td class='h'>{r['label']}<small>{sub}</small></td>"
             f"<td class='muted'>{r['test_window'].replace(' 至 20', ' → ')[2:]}</td>"
             f"<td>{int(r['n'])}{'' if r['n_eff'] == r['n'] else ' (' + str(int(r['n_eff'])) + ')'}</td>"
             f"<td>{r['typical_move_bp']:.1f}</td>"
@@ -63,7 +78,8 @@ def build(t, cost, path):
             f"<td>{_pct(r['hit_rate'])}</td><td class='muted'>{_pct(r['hit_base'])}</td>"
             f"<td class='{_c(r['hit_edge'])}'>{r['hit_edge'] * 100:+.1f}</td><td>{_num(r['hit_edge_p'], 2)}</td>"
             f"<td class='{_c(r['ic'])}'>{_num(r['ic'])}</td><td>{_num(r['ic_t'], 2)}</td>"
-            f"<td>{_pct(r['coverage_80'])}</td>"
+            + (f"<td class='muted'>{_num(r['ic_shared'])}</td>" if tuned else "")
+            + f"<td>{_pct(r['coverage_80'])}</td>"
             f"<td class='{'good' if r['edge_per_trade_bp'] > cost and abs(r['ic_t']) >= 2 else ''}'>"
             f"{r['edge_per_trade_bp']:+.2f}</td></tr>")
     html = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
@@ -72,15 +88,15 @@ def build(t, cost, path):
 <h1>NVDA:从一周到一分钟,预测有多准?</h1>
 <p class="sub">1 周和 1 天用日线外部因子模型(154 个因子);1 小时到 1 分钟用日内 K 线模型(NVDA 自身走势、QQQ/SMH/SPY 联动、
 日内 VIX、成交量、时段、开盘动量、杠杆 ETF 收盘调仓窗口、财报/期权到期日,并把日线模型对当天的预测作为一个因子)。
-两者都是 Ridge + LightGBM,滚动重训,只用当时已知的数据。</p>
+{"<b>每个预测期都是单独的模型</b>:各自的预测目标、各自的训练数据、各自的滚动重训;模型类型和复杂度(Ridge / LightGBM 大中小 / 两者混合)也由该预测期自己训练期内的交叉验证单独选出,不同预测期之间不共用任何模型。" if tuned else "两者都是 Ridge + LightGBM,滚动重训,只用当时已知的数据。"}</p>
 
 <h2>准确率表</h2>
 <div class="card tw"><table>
 <tr><th colspan="4"></th><th class="grp" colspan="2">价格误差</th><th class="grp" colspan="4">涨跌方向</th>
-<th class="grp" colspan="2">排序</th><th class="grp">风险</th><th class="grp">交易</th></tr>
+<th class="grp" colspan="{3 if tuned else 2}">排序</th><th class="grp">风险</th><th class="grp">交易</th></tr>
 <tr><th>预测期 / 数据</th><th>样本外区间</th><th>样本数</th><th>典型波动 bp</th>
 <th>模型</th><th>不预测</th><th>命中率</th><th>多数方向</th><th>超出(百分点)</th><th>p 值</th>
-<th>IC</th><th>IC t</th><th>80%覆盖</th><th>每笔超额 bp</th></tr>
+<th>IC</th><th>IC t</th>{"<th>统一设置时 IC</th>" if tuned else ""}<th>80%覆盖</th><th>每笔超额 bp</th></tr>
 {''.join(rows)}</table></div>
 <p class="note">不预测 = 直接用现在的价格当下一刻的预测。多数方向 = 样本外里涨和跌哪个多就一直猜哪个。
 样本数括号里是有效样本(多日窗口互相重叠,按 样本数÷天数 计),p 值和 IC t 都按有效样本计算。
@@ -88,7 +104,7 @@ def build(t, cost, path):
 只有超过约 {cost:g}bp 的来回价差成本、且 IC 显著(|t|≥2)时才标绿。</p>
 
 <h2>结论</h2>
-<div class="card"><ul class="concl">{_conclusions(t, cost)}</ul></div>
+<div class="card"><ul class="concl">{("<li>" + _tuned_conclusion(t) + "</li>") if tuned else ""}{_conclusions(t, cost)}</ul></div>
 <p class="note">不构成投资建议。</p>
 </main></body></html>"""
     path.write_text(html, encoding="utf-8")
