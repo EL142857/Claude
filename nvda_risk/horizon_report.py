@@ -45,7 +45,9 @@ def _conclusions(t):
     out.append("<b>价格误差相对随机游走:</b>" + (
         f"模型在 {'、'.join(f'{h} 日' for h in beat)} 比随机游走误差小 0.5% 以上(相对);"
         if beat else "没有任何一个预测期比随机游走的价格误差小 0.5% 以上(相对);")
-        + "其余预测期两者几乎一样。")
+        + "其余预测期两者几乎一样。"
+        + ("这些改善期的 R² vs 漂移都是负的,说明改善来自模型学到了 NVDA 的平均上涨幅度,而不是择时 — "
+           "直接按历史平均涨幅外推会更准。" if beat and all(t.loc[h, "r2_vs_drift"] < 0 for h in beat) else ""))
     edge = [h for h in hs if t.loc[h, "hit_edge"] > 0.01]
     sig = [h for h in hs if t.loc[h, "hit_edge_p"] < 0.05 and t.loc[h, "hit_edge"] > 0]
     out.append(f"<b>方向:</b>命中率在长预测期看起来更高(最高 {_pct(t['hit_rate'].max())}),但那是因为 NVDA 这两年大部分时间在涨,"
