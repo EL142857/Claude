@@ -125,7 +125,12 @@ def main(out=OUT, reuse=False):
         "scenario_labels": {k: v[0] for k, v in SCENARIOS.items()},
     }
     (out / "results.json").write_text(json.dumps(results, indent=2, default=float))
-    panel_report.build(results, resp, resp_early, emp_b, emp_t, shares, pnls, out / "report.html")
+    hier = None
+    if (out / "hier.json").exists():
+        rc = lambda k: pd.read_csv(out / f"{k}.csv", index_col=0)
+        hier = {"json": json.loads((out / "hier.json").read_text()), "resp": rc("hier_response"),
+                "lo": rc("hier_lo"), "hi": rc("hier_hi"), "dev_lo": rc("hier_dev_lo"), "dev_hi": rc("hier_dev_hi")}
+    panel_report.build(results, resp, resp_early, emp_b, emp_t, shares, pnls, out / "report.html", hier=hier)
     print(f"wrote {out / 'report.html'}")
 
 

@@ -41,6 +41,7 @@ function render(){
   heat('h_model',D.model,true,'','%{y} → %{x}<br>模型预测 5 日收益变化 %{z:.2f}%<br>%{customdata}<extra></extra>');
   heat('h_emp',D.emp,true,'','%{y} → %{x}<br>历史实测 %{z:.2f}% / 1σ<br>%{customdata}<extra></extra>');
   heat('h_shap',D.shap,false,'','%{x} · %{y}<br>占该股预测驱动的 %{z:.1f}%<extra></extra>');
+  if(D.hier) heat('h_hier',D.hier,true,'','%{y} → %{x}<br>分层模型预测 5 日收益变化 %{z:.2f}%<br>%{customdata}<extra></extra>');
   const E=D.eq, c=[v('--s1'),v('--s2'),v('--s3')];
   Plotly.react('c_eq',E.series.map((s,i)=>({x:E.d,y:s.y,name:s.name,line:{color:c[i],width:2},
     hovertemplate:'%{y:.2f}'})),{paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
@@ -119,7 +120,54 @@ def _conclusions(res, resp, emp_b, emp_t, shares, labels):
     return "".join(f"<li>{x}</li>" for x in out)
 
 
-def build(res, resp, resp_early, emp_b, emp_t, shares, pnls, path):
+VARIANT_ZH = {"common": "统一斜率(各股反应相同)", "hier": "分层(共同斜率 + 收缩的个股偏离)",
+              "separate": "各股完全独立", "lgbm": "合并 LightGBM"}
+
+
+def _hier_section(hz, labels, cols):
+    """HTML + heatmap payload for the hierarchical-model comparison."""
+    j, resp = hz["json"], hz["resp"][cols]
+    lo, hi, dlo, dhi = (hz[k][cols] for k in ("lo", "hi", "dev_lo", "dev_hi"))
+    sig_dev = (dlo > 0) | (dhi < 0)
+    text = [[f"{resp.loc[k, c]:+.2f}{'*' if sig_dev.loc[k, c] else ''}" for c in cols] for k in resp.index]
+    hover = [[f"90% 区间 {lo.loc[k, c]:+.2f} ~ {hi.loc[k, c]:+.2f}%<br>"
+              f"个股特有部分 {dlo.loc[k, c]:+.2f} ~ {dhi.loc[k, c]:+.2f}%" for c in cols] for k in resp.index]
+    m = _matrix(resp.rename(index=labels), "{:+.2f}", hover)
+    m["text"] = text
+    sc = j["scores"]
+    rows = "".join(
+        f"<tr><td>{VARIANT_ZH[k]}</td><td>{_num(v['avg_ic'])}</td><td>{v['n_stocks_ic_pos']}/{len(cols)}</td>"
+        f"<td>{_pct(v['oos_r2_norm'], 2)}</td><td>{_num(v['xs_rank_ic'])}</td><td>{_num(v['xs_rank_ic_t'], 2)}</td></tr>"
+        for k, v in sc.items())
+    cvs = " · ".join(f"c={k}:{v:.4f}" for k, v in j["cv_mse_by_c"].items())
+    best = max(sc, key=lambda k: sc[k]["avg_ic"])
+    c_txt = ("交叉验证选了 c = 0,也就是<b>数据认为各股对同一因子的反应应该完全相同</b>,个股偏离只会增加噪声。"
+             if j["c_cv"] == 0 else
+             f"交叉验证选了 c = {j['c_cv']},即保留一部分个股差异。")
+    concl = [
+        f"<b>收缩强度:</b>{c_txt}(2024 年前数据的验证误差:{cvs};各股完全独立:{j['cv_mse_separate']:.4f})",
+        f"<b>样本外:</b>平均 IC 最高的是「{VARIANT_ZH[best]}」({sc[best]['avg_ic']:+.3f})。"
+        f"各股完全独立的模型 IC {sc['separate']['avg_ic']:+.3f},统一斜率 {sc['common']['avg_ic']:+.3f}。",
+        f"<b>个股特有反应有多少是可信的:</b>{j['n_cells']} 个(冲击×股票)格子里,个股特有部分的 90% 自助区间不含 0 的有 "
+        f"{j['sig_stock_specific_cells']} 个(图中标 *;纯随机约 {j['n_cells'] * 0.1:.0f} 个)。"
+        f"分层模型的个股差异格局和历史实测的一致性 {j['pattern_vs_history']:+.2f}。",
+    ]
+    if j["c_cv"] == 0:
+        concl.append(f"图中为了让个股差异可见,用的是 c = {j['c_shown']}(轻度保留差异)的版本。")
+    html = f"""<h2>分层模型:各股真的有自己的反应吗?</h2>
+<p class="note">线性模型:每个因子一个所有股票共用的斜率,再加每只股票自己的偏离,偏离被收缩向 0;收缩强度 c 由 2024 年前数据的
+清洗过的滚动交叉验证决定(c=0 = 各股反应相同,c 越大越接近各股独立)。线性模型里冲击反应就是斜率本身,可以直接做按季度分块的自助法,
+看个股差异是不是噪声。</p>
+<div class="card"><ul class="concl">{''.join(f'<li>{x}</li>' for x in concl)}</ul></div>
+<div class="card tw"><table><tr><th>模型</th><th>平均 IC</th><th>IC>0 的股票</th><th>R²(波动标准化)</th>
+<th>截面 rank IC</th><th>截面 t</th></tr>{rows}</table></div>
+<p class="note">分层模型的冲击反应(%);* = 该股的个股特有部分 90% 自助区间不含 0。悬停看区间。</p>
+<div class="card tw"><div id="h_hier" class="chart hm"></div></div>
+"""
+    return html, m
+
+
+def build(res, resp, resp_early, emp_b, emp_t, shares, pnls, path, hier=None):
     labels = res["scenario_labels"]
     cols = res["universe"]
     resp = resp[cols]
@@ -137,9 +185,13 @@ def build(res, resp, resp_early, emp_b, emp_t, shares, pnls, path):
         "model": _matrix(rz, "{:+.2f}", hover_m),
         "emp": _matrix(ez, "{:+.2f}", hover_e),
         "shap": _matrix(sh, "{:.0f}"),
+        "hier": None,
         "eq": {"d": [str(x.date()) for x in eq.index],
                "series": [{"name": names[c], "y": eq[c].round(4).tolist()} for c in eq]},
     }
+    hier_html = ""
+    if hier is not None:
+        hier_html, payload["hier"] = _hier_section(hier, labels, cols)
     rows = "".join(
         f"<tr><td>{t}</td><td>{m['n']}</td><td>{_num(m['ic_spearman'])}</td><td>{_num(m['monthly_ic_tstat'], 2)}</td>"
         f"<td>{_pct(m['hit_rate'])}</td><td>{_pct(m['hit_rate_always_up'])}</td><td>{_pct(m['share_pred_up'], 0)}</td>"
@@ -172,6 +224,7 @@ def build(res, resp, resp_early, emp_b, emp_t, shares, pnls, path):
 和上图的单位不完全一样,应该比较的是颜色格局。</p>
 <div class="card tw"><div id="h_emp" class="chart hm"></div></div>
 
+{hier_html}
 <h2>每只股票的预测由哪些因子驱动</h2>
 <p class="note">SHAP 贡献:同一个模型,对不同股票,各组因子各占其预测驱动力的百分比(每列加起来 100%)。</p>
 <div class="card tw"><div id="h_shap" class="chart hm2"></div></div>
