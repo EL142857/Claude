@@ -7,6 +7,7 @@ and hold -sign(r) x NOTIONAL of NVDA until T+30m. Flat at 15:59, never overnight
   python paper/bot.py              # trade today's session on the paper account
   python paper/bot.py --dry-run    # same loop, log decisions, send no orders
   python paper/bot.py --replay     # check the decision logic against the backtest
+  python paper/bot.py --flatten    # emergency: close the NVDA position now
 
 Credentials: APCA_API_KEY_ID / APCA_API_SECRET_KEY (paper keys) from the
 environment. The trading host is fixed to the paper endpoint.
@@ -141,8 +142,13 @@ def _log(row):
     print(json.dumps(row, default=str), flush=True)
 
 
+HEARTBEAT = HERE / "logs" / "heartbeat"
+
+
 def _sleep_until(t):
     while True:
+        HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
+        HEARTBEAT.write_text(datetime.now(ET).isoformat())
         dt = (t - datetime.now(ET)).total_seconds()
         if dt <= 0:
             return
@@ -245,8 +251,15 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--replay", action="store_true")
+    ap.add_argument("--flatten", action="store_true")
     a = ap.parse_args()
     if a.replay:
         replay()
+    elif a.flatten:
+        api = Alpaca()
+        cur = api.position()
+        o = api.close_all() if cur else None
+        _log({"time": datetime.now(ET).isoformat(), "action": "manual_flatten", "pos_before": cur, "target": 0,
+              "order_id": (o or {}).get("id", ""), "equity": api.account()["equity"]})
     else:
         run(dry_run=a.dry_run)
