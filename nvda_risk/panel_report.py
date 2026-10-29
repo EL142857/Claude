@@ -72,6 +72,12 @@ def _conclusions(res, resp, emp_b, emp_t, shares, labels):
                f"({'、'.join(beat) or '无'})。区间覆盖率在 "
                f"{min(m['coverage_80'] for m in ps.values()) * 100:.0f}%–{max(m['coverage_80'] for m in ps.values()) * 100:.0f}%"
                "(目标 80%),风险刻画依然是最稳的部分。")
+    mt = [t for t, m in ps.items() if m["monthly_ic_tstat"] >= 2]
+    if mt:
+        out.append(f"<b>月内有信号,跨月判断是反的:</b>{'、'.join(mt)} 的月度 IC t 值 ≥2(同一个月内,预测高的日子之后 5 天确实涨得更多),"
+                   "但整体 IC 接近 0 甚至为负 — 模型对「这个月整体好不好」的判断和实际相反,抵消了月内的排序能力。"
+                   "这个月内信号主要来自短期反转(预测与过去 5 日涨幅强负相关);拿未来第 10–15、20–25 天做安慰剂检验都接近 0,"
+                   "说明不是数据泄漏,但只取不重叠样本时 t 值降到约 1.4,还不能算可靠结论。")
     xs = res["cross_section"]
     out.append(f"<b>股票之间的相对排序:</b>每日截面 rank IC 均值 {xs['rank_ic_mean']:+.3f},"
                f"非重叠 t 值 {xs['rank_ic_tstat_nonoverlap']:.2f}"
@@ -87,12 +93,25 @@ def _conclusions(res, resp, emp_b, emp_t, shares, labels):
         r = resp.loc[k]
         lines.append(f"{labels[k]}:{r.idxmin()} {r.min():+.2f}% … {r.idxmax()} {r.max():+.2f}%")
     out.append("<b>各股反应差异最大的冲击:</b>" + ";".join(lines) + "。")
+    out.append(f"<b>模型眼里九只股票其实是同一只:</b>每个冲击下,各股反应大小和该股波动率的秩相关中位数为 "
+               f"{res['agreement']['vol_scaling_corr_median']:+.2f} — 模型给出的是同一个择时信号,再按波动率放大"
+               f"(TSLA、AMD 最大,MSFT、AAPL 最小)。股票身份在 SHAP 中只占 "
+               f"{shares.get('identity', pd.Series([0])).mean() * 100:.1f}%,各股的因子驱动构成几乎一样。")
     sig = (emp_t.abs() >= 2).sum().sum()
     out.append(f"<b>历史实测核对:</b>{emp_t.size} 个(冲击×股票)组合里,历史回归 |t|≥2 的有 {sig} 个"
                f"(纯随机约 {emp_t.size * 0.05:.0f} 个)。模型反应与历史实测的整体一致性 "
                f"{res['agreement']['model_vs_history_all']:+.2f},去掉每个冲击的平均反应后只看股票间差异 "
                f"{res['agreement']['model_vs_history_pattern']:+.2f};和只用 2024 年前数据训练的同一模型相比 "
                f"{res['agreement']['model_vs_pre2024_all']:+.2f}。")
+    robust = []
+    for k in emp_t.index:
+        n_sig = int((emp_t.loc[k].abs() >= 2).sum())
+        if n_sig >= 3:
+            sgn = "负" if emp_b.loc[k][emp_t.loc[k].abs() >= 2].mean() < 0 else "正"
+            robust.append(f"{labels[k]}({n_sig} 只显著,方向为{sgn})")
+    if robust:
+        out.append("<b>历史上多只股票都显著的冲击:</b>" + "、".join(robust)
+                   + "。只在一两只股票上显著的格子,多重检验下很可能是偶然。")
     top_q = shares.get("fund_flows")
     if top_q is not None:
         out.append(f"<b>量化基金整体仓位的影响力:</b>占各股预测驱动的 {top_q.min() * 100:.0f}%–{top_q.max() * 100:.0f}%,"

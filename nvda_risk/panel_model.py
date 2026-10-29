@@ -120,7 +120,8 @@ def empirical(X, y_raw, sd, mean):
                 x = g["s"]                                             # beta = event-window effect
             else:
                 x = g["s"] / g["s"].std()
-            fit = sm.OLS(g["y"] * 100, sm.add_constant(x.values)).fit(cov_type="HAC", cov_kwds={"maxlags": 5})
+            fit = sm.OLS(g["y"].values * 100, sm.add_constant(x.values)).fit(
+                cov_type="HAC", cov_kwds={"maxlags": 5})
             b[tk], t[tk] = fit.params[1], fit.tvalues[1]
         beta[key], tstat[key] = pd.Series(b), pd.Series(t)
     return pd.DataFrame(beta).T, pd.DataFrame(tstat).T

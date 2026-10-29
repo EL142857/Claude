@@ -67,3 +67,18 @@ python tests/smoke_test.py   # 用随机合成数据检查流程能跑通(数字
 
 未纳入真实期权链 Gamma 敞口、13F 持仓、做空余额、新闻情绪(需付费或额外数据源)。
 股价预测信噪比极低,IC 0.02–0.05 已属可用。不构成投资建议。
+
+## 合并模型:九只科技股共用一个模型(`run_panel.py`)
+
+```bash
+python run_panel.py           # 完整运行(约 5 分钟)
+python run_panel.py --reuse   # 复用已保存的滚动预测,只重做分析和报告
+```
+
+- 股票池:NVDA、AMD、AVGO、AAPL、MSFT、GOOGL、AMZN、META、TSLA(`config.UNIVERSE`)
+- 每行是(日期,股票):大盘/宏观/利率/信用/流动性/地缘/量化基金整体仓位对所有股票相同;
+  个股技术面、同业篮子、个股 CTA 仓位、统计套利残差、beta、微观结构、财报日历按股票计算(`panel.py`)
+- 一个 LightGBM,目标是 5 日收益 ÷ 该股事前波动,带 stock_id(`panel_model.py`)
+- 冲击情景(`config.SCENARIOS`):把一组因子推 1σ,看每只股票的预测反应;
+  再用历史回归(Newey-West t 值)核对模型说的差异是否真实存在
+- 报告:`output/panel/report.html`

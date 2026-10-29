@@ -1,7 +1,9 @@
 """Pooled model over the mega-cap tech universe and how each stock reacts to factor shocks.
 
-  python run_panel.py
+  python run_panel.py           # full run
+  python run_panel.py --reuse   # reuse saved walk-forward forecasts, redo the analysis
 """
+import argparse
 import json
 from pathlib import Path
 
@@ -49,7 +51,7 @@ def cross_section(fc, close_wide, top=3):
     }, p
 
 
-def main(out=OUT):
+def main(out=OUT, reuse=False):
     out.mkdir(parents=True, exist_ok=True)
     ohlcv, fred, nvda_earn, missing = data.load_all(extra=UNIVERSE)
     earnings = {t: data.load_earnings_for(t) for t in UNIVERSE}
@@ -60,8 +62,11 @@ def main(out=OUT):
           f"{d.min().date()} .. {d.max().date()}")
 
     # 1) out-of-sample: is one pooled model any good, per stock?
-    fc = pm.walk_forward(X, y_norm, scale, y_raw, TEST_START, H)
-    fc.to_csv(out / "forecast.csv")
+    if reuse and (out / "forecast.csv").exists():
+        fc = pd.read_csv(out / "forecast.csv", index_col=[0, 1], parse_dates=[0])
+    else:
+        fc = pm.walk_forward(X, y_norm, scale, y_raw, TEST_START, H)
+        fc.to_csv(out / "forecast.csv")
     per_stock = {}
     for t in UNIVERSE:
         f = fc.xs(t, level="ticker")
@@ -100,6 +105,11 @@ def main(out=OUT):
         "per_scenario_pattern": {k: float(stats.spearmanr(resp.loc[k], emp_b.loc[k, resp.columns]).statistic)
                                  for k in resp.index},
     }
+    # how much of the model's cross-stock difference is just each stock's volatility?
+    vol = scale[d >= TEST_START].groupby(level="ticker").mean()
+    agree["vol_scaling_corr"] = {k: float(stats.spearmanr(resp.loc[k].abs(), vol[resp.columns]).statistic)
+                                 for k in resp.index}
+    agree["vol_scaling_corr_median"] = float(np.median(list(agree["vol_scaling_corr"].values())))
     print("  agreement:", {k: round(v, 3) for k, v in agree.items() if not isinstance(v, dict)})
 
     single = Path(__file__).parent / "output" / "results.json"
@@ -120,4 +130,6 @@ def main(out=OUT):
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--reuse", action="store_true")
+    main(reuse=ap.parse_args().reuse)
