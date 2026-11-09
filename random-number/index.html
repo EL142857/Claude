@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>一至十随机数</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600;6..96,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;900&display=swap">
 <style>
-/* Layout: a catalogue plate. Vertical title at left, the instrument in the middle, the ledger at right; one column on a phone.
-   One committed look: black lacquer, painted gold, a jade cabochon, a cinnabar seal. */
+/* Layout: a real-time 3D armillary fills the plate; the vertical title sits at its left, the ledger at its right, the control at its foot.
+   On a phone the scene becomes a block between the title and the control.
+   One committed look: black lacquer, gold, crystal, imperial jade, a cinnabar seal. */
 :root {
   --lacquer: #0a0807;
-  --lacquer-warm: #2b1c0d;
   --gold: #d9b55c;
   --gold-hi: #fbe9ad;
   --gold-lo: #8a6524;
@@ -18,7 +18,6 @@
   --ivory: #efe6d2;
   --muted: #a39474;
   --line: #3b2e1b;
-  --jade: #39d9a0;
   --cinnabar: #b83222;
   --ink-on-gold: #1a1206;
   --serif-cn: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
@@ -35,14 +34,12 @@ body {
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(58% 52% at 50% 47%, rgba(140, 96, 34, .24), rgba(140, 96, 34, 0) 72%),
+    radial-gradient(58% 52% at 50% 47%, rgba(140, 96, 34, .2), rgba(140, 96, 34, 0) 72%),
     radial-gradient(130% 100% at 50% 50%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, .7) 100%),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .86  0 0 0 0 .62  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
     var(--lacquer);
 }
 p, h1, h2, ol { margin: 0; padding: 0; }
-
-#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+[hidden] { display: none !important; }
 
 .plate {
   position: relative;
@@ -52,11 +49,23 @@ p, h1, h2, ol { margin: 0; padding: 0; }
   grid-template-rows: auto 1fr;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 0 26px;
+  padding-block: 0 22px;
   overflow: clip;
 }
 
-.top { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(0px, 2vw, 24px); }
+/* ——— the 3D scene ——— */
+.scene { position: absolute; inset: 0; z-index: 0; }
+.scene canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity 1.4s ease-out; }
+.scene.live canvas { opacity: 1; }
+.flat {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font: 600 min(38vh, 44vw) var(--display); color: var(--gold);
+  background: linear-gradient(170deg, #fff3c4 0%, #e3c16b 30%, #a57a2a 52%, #efd487 60%, #b98d36 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+.top, .legend, .record, .draw, .hint { position: relative; z-index: 1; }
+.top { display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(0px, 2vw, 24px); }
 .mark { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; letter-spacing: .5em; color: var(--gold); }
 .mark i { width: 7px; height: 7px; background: var(--gold); transform: rotate(45deg); }
 .sound {
@@ -67,7 +76,7 @@ p, h1, h2, ol { margin: 0; padding: 0; }
 
 .stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 42vw, 580px) minmax(0, 1fr);
   align-items: center;
   column-gap: clamp(20px, 3vw, 56px);
   padding-inline: clamp(0px, 2vw, 24px);
@@ -86,63 +95,10 @@ p, h1, h2, ol { margin: 0; padding: 0; }
 }
 .motto { margin-right: 28px; padding-top: 1.6em; font-size: 14px; line-height: 1; letter-spacing: .55em; color: var(--muted); }
 
-/* ——— instrument ——— */
-.center { display: flex; flex-direction: column; align-items: center; gap: 22px; }
-.mount { position: relative; width: min(60vh, 40vw, 560px); aspect-ratio: 1; max-width: 100%; }
-.mount::before {
-  content: ""; position: absolute; inset: -40%; border-radius: 50%; pointer-events: none;
-  background: repeating-radial-gradient(circle closest-side, rgba(217, 181, 92, 0) 0 5.5%, rgba(217, 181, 92, .1) 5.5% 5.72%);
-  -webkit-mask: radial-gradient(circle closest-side, #000 52%, transparent 100%);
-  mask: radial-gradient(circle closest-side, #000 52%, transparent 100%);
-}
-.piece {
-  position: absolute; inset: 0; border-radius: 50%;
-  transform: perspective(1400px) rotateX(calc(var(--tx, 0) * 1deg)) rotateY(calc(var(--ty, 0) * 1deg));
-  box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 120px -12px rgba(214, 170, 80, .3);
-}
-.piece.won { animation: aura 1.5s ease-out; }
-@keyframes aura {
-  0% { box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 120px -12px rgba(214, 170, 80, .3); }
-  18% { box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 170px 18px rgba(255, 214, 120, .6); }
-  100% { box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 120px -12px rgba(214, 170, 80, .3); }
-}
-.piece > * { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
-.sunray, .sheen, .glass { pointer-events: none; }
-.sunray {
-  background: conic-gradient(from calc(var(--la, -58) * 1deg - 20deg),
-    rgba(255, 236, 190, 0) 0deg, rgba(255, 236, 190, .11) 30deg, rgba(255, 236, 190, 0) 62deg,
-    rgba(255, 236, 190, 0) 180deg, rgba(255, 236, 190, .06) 210deg, rgba(255, 236, 190, 0) 242deg, rgba(255, 236, 190, 0) 360deg);
-  -webkit-mask: radial-gradient(circle closest-side, transparent 50.6%, #000 51.2%, #000 76%, transparent 76.6%);
-  mask: radial-gradient(circle closest-side, transparent 50.6%, #000 51.2%, #000 76%, transparent 76.6%);
-}
-.sheen {
-  background: conic-gradient(from calc(var(--la, -58) * 1deg),
-    rgba(255, 250, 228, 0) 0deg, rgba(255, 250, 228, .85) 16deg, rgba(255, 250, 228, 0) 38deg,
-    rgba(255, 250, 228, 0) 168deg, rgba(255, 250, 228, .4) 192deg, rgba(255, 250, 228, 0) 218deg, rgba(255, 250, 228, 0) 360deg);
-  -webkit-mask: radial-gradient(circle closest-side, transparent 87.6%, #000 88.4%, #000 98.4%, transparent 99%);
-  mask: radial-gradient(circle closest-side, transparent 87.6%, #000 88.4%, #000 98.4%, transparent 99%);
-}
-.piece > .glass {
-  inset: 6.4%; width: auto; height: auto;
-  background:
-    radial-gradient(ellipse 58% 34% at var(--gx, 34%) var(--gy, 20%), rgba(255, 255, 255, .15), rgba(255, 255, 255, 0) 72%),
-    linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, 0) 42%);
-}
-
-.idx, .stem, .num { text-anchor: middle; dominant-baseline: central; }
-.idx { font-family: var(--display); font-size: 30px; font-weight: 500; fill: #8f7a4c; transition: fill 1.2s ease-out, filter 1.2s ease-out; }
-.idx.on { fill: #fff3c0; filter: drop-shadow(0 0 6px rgba(255, 214, 120, .95)); transition: none; }
-.stem { font-family: var(--serif-cn); font-size: 14px; font-weight: 600; fill: #6b5a36; transition: fill 1.2s ease-out; }
-.stem.on { fill: #f3d98f; transition: none; }
-.num { font-family: var(--display); font-weight: 500; font-size: 172px; transform-box: fill-box; transform-origin: center; }
-.spinning .num { opacity: .3; }
-.spinning .num.sweep { opacity: 0; }
-.num.reveal { animation: pop .75s cubic-bezier(.2, 1.5, .3, 1) both; }
-@keyframes pop { from { transform: scale(.8); opacity: .2; } to { transform: scale(1); opacity: 1; } }
-
 /* ——— control ——— */
+.center { align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 14px; }
 .draw {
-  position: relative; overflow: hidden; cursor: pointer; border: 0; border-radius: 999px;
+  overflow: hidden; cursor: pointer; border: 0; border-radius: 999px;
   font: 600 17px var(--serif-cn); letter-spacing: .7em; color: var(--ink-on-gold);
   padding: 15px 56px 15px calc(56px + .7em);
   background: linear-gradient(180deg, #fdeeb5 0%, #e2bf68 38%, #b98d34 52%, #d8b25a 70%, #f6de96 100%);
@@ -158,7 +114,7 @@ p, h1, h2, ol { margin: 0; padding: 0; }
 .draw:hover::after { transform: translateX(120%); }
 .draw:hover { filter: brightness(1.06); }
 .draw:active { transform: translateY(2px); }
-.draw.busy { background: none; color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim), 0 0 0 4px var(--lacquer), 0 0 0 5px var(--line); }
+.draw.busy { background: rgba(10, 8, 7, .7); color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim), 0 0 0 4px var(--lacquer), 0 0 0 5px var(--line); }
 .draw.busy::after { display: none; }
 .draw:focus-visible, .sound:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 7px; }
 .hint { font-size: 12px; letter-spacing: .3em; color: var(--muted); }
@@ -204,25 +160,26 @@ p, h1, h2, ol { margin: 0; padding: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 @media (max-width: 1099px) {
-  .stage { grid-template-columns: minmax(0, 1fr); justify-items: center; row-gap: 26px; padding-block: 4px 16px; }
+  .stage { grid-template-columns: minmax(0, 1fr); justify-items: center; row-gap: 22px; padding-block: 4px 16px; }
   .legend { writing-mode: horizontal-tb; text-align: center; }
   .title { font-size: clamp(34px, 9vw, 52px); letter-spacing: .5em; margin-right: -.5em; }
   .motto { margin: 12px 0 0; padding: 0; font-size: 12px; letter-spacing: .3em; }
   .center { width: 100%; }
-  .mount { width: min(100%, 64vh, 520px); }
+  .scene {
+    position: relative; inset: auto; width: 100%; max-width: 560px; aspect-ratio: 5 / 6; max-height: 72vh;
+    -webkit-mask: radial-gradient(ellipse 80% 76% at 50% 50%, #000 70%, transparent 100%);
+    mask: radial-gradient(ellipse 80% 76% at 50% 50%, #000 70%, transparent 100%);
+  }
   .record { justify-self: center; max-width: 440px; }
   .rows { min-height: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .piece { transform: none; }
-  .piece.won, .num.reveal, .seal.stamp { animation: none; }
-  .idx, .stem, .col .b, .draw, .draw::after { transition: none; }
+  .seal.stamp { animation: none; }
+  .col .b, .draw, .draw::after, .scene canvas { transition: none; }
 }
 </style>
 </head>
 <body>
-
-<canvas id="fx" aria-hidden="true"></canvas>
 
 <div class="plate">
   <header class="top">
@@ -234,63 +191,13 @@ p, h1, h2, ol { margin: 0; padding: 0; }
   <main class="stage">
     <div class="legend">
       <h1 class="title">一至十</h1>
-      <p class="motto">天干为序　五音为应　十数之中　择一而出</p>
+      <p class="motto">环定其位　珠应而出　化而为数　十中取一</p>
     </div>
 
     <div class="center">
-      <div class="mount" id="mount">
-        <div class="piece" id="piece">
-          <canvas id="dialBody"></canvas>
-          <div class="sunray"></div>
-          <svg id="face" viewBox="0 0 600 600" role="img" aria-label="一到十的随机数仪表">
-            <defs>
-              <linearGradient id="gFoil" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#fff3c4"/><stop offset=".3" stop-color="#e6c570"/>
-                <stop offset=".5" stop-color="#a87d2b"/><stop offset=".56" stop-color="#f0d488"/>
-                <stop offset=".8" stop-color="#c69a40"/><stop offset="1" stop-color="#8c6722"/>
-              </linearGradient>
-              <linearGradient id="gSweep" gradientUnits="userSpaceOnUse" x1="-55" y1="0" x2="55" y2="0" gradientTransform="translate(-400 0)">
-                <stop offset="0" stop-color="#fffbe6" stop-opacity="0"/><stop offset=".5" stop-color="#fffbe6" stop-opacity=".95"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/>
-              </linearGradient>
-              <radialGradient id="gJade" cx=".35" cy=".3" r=".8">
-                <stop offset="0" stop-color="#d9ffe9"/><stop offset=".25" stop-color="#4fd1a0"/>
-                <stop offset=".65" stop-color="#0f7a57"/><stop offset="1" stop-color="#04261b"/>
-              </radialGradient>
-              <linearGradient id="gRing" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#fff3c4"/><stop offset=".5" stop-color="#b88a32"/><stop offset="1" stop-color="#f1d98e"/>
-              </linearGradient>
-              <filter id="emboss" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
-                <feGaussianBlur in="SourceAlpha" stdDeviation="2.4" result="blur"/>
-                <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.05" specularExponent="26" lighting-color="#fff3c4" result="spec">
-                  <fePointLight id="pl" x="190" y="150" z="210"/>
-                </feSpecularLighting>
-                <feComposite in="spec" in2="SourceAlpha" operator="in" result="specIn"/>
-                <feComposite in="SourceGraphic" in2="specIn" operator="arithmetic" k1="0" k2="1" k3=".9" k4="0" result="lit"/>
-                <feOffset in="blur" dx="0" dy="5" result="off"/>
-                <feFlood flood-color="#000" flood-opacity=".75"/>
-                <feComposite in2="off" operator="in" result="shadow"/>
-                <feMerge><feMergeNode in="shadow"/><feMergeNode in="lit"/></feMerge>
-              </filter>
-              <filter id="halo" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="8"/></filter>
-            </defs>
-            <g id="ring"></g>
-            <g id="carriage">
-              <g id="trail"></g>
-              <circle cx="300" cy="160" r="20" fill="#39d9a0" opacity=".4" filter="url(#halo)"/>
-              <path d="M300 141.5l-4.5 8h9z" fill="#f1d98e"/>
-              <g id="gem">
-                <circle cx="300" cy="160" r="13" fill="url(#gRing)"/>
-                <circle cx="300" cy="160" r="11.4" fill="none" stroke="#3b2a0a" stroke-width=".9"/>
-                <circle cx="300" cy="160" r="9.6" fill="url(#gJade)"/>
-                <ellipse cx="296.6" cy="156.2" rx="3.3" ry="2" fill="#fff" opacity=".8" transform="rotate(-30 296.6 156.2)"/>
-              </g>
-            </g>
-            <text id="num" class="num" x="300" y="305" fill="url(#gFoil)" filter="url(#emboss)">–</text>
-            <text id="numSweep" class="num sweep" x="300" y="305" fill="url(#gSweep)">–</text>
-          </svg>
-          <div class="sheen"></div>
-          <div class="glass"></div>
-        </div>
+      <div class="scene" id="scene">
+        <canvas id="gl" role="img" aria-label="三维十数仪：水晶球中的十颗玉珠，抽出的数字浮在球顶"></canvas>
+        <div class="flat" id="flat" hidden></div>
       </div>
       <button class="draw" id="draw" type="button"><span id="drawLabel">抽取</span></button>
       <p class="hint">按空格键亦可抽取</p>
@@ -336,133 +243,33 @@ p, h1, h2, ol { margin: 0; padding: 0; }
     </aside>
   </main>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script>
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var NS = 'http://www.w3.org/2000/svg', TAU = Math.PI * 2;
+  var TAU = Math.PI * 2;
   var STEMS = '甲乙丙丁戊己庚辛壬癸', CAPS = '壹贰叁肆伍陆柒捌玖拾';
   var TONES = ['宫', '商', '角', '徵', '羽'], RATIO = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3];
-  var mount = $('mount'), piece = $('piece'), cv = $('dialBody'), face = $('face');
-  var carriage = $('carriage'), gem = $('gem'), num = $('num'), numSweep = $('numSweep');
-  var sweepGrad = $('gSweep'), light = $('pl'), btn = $('draw'), label = $('drawLabel'), seal = $('seal');
+  var NUMFONT = '"Bodoni Moda", Didot, "Bodoni 72", "Times New Roman", serif';
+  var CNFONT = '"Noto Serif SC", "Songti SC", STSong, SimSun, serif';
+  var btn = $('draw'), label = $('drawLabel'), seal = $('seal');
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
-  function pol(r, deg) { var a = deg * Math.PI / 180; return [300 + r * Math.sin(a), 300 - r * Math.cos(a)]; }
-  function el(name, attrs, text) {
-    var e = document.createElementNS(NS, name), k;
-    for (k in attrs) e.setAttribute(k, attrs[k]);
-    if (text != null) e.textContent = text;
-    return e;
-  }
 
-  /* ——— the face: ten numerals, ten heavenly stems, the jewel's trail ——— */
-  var idx = {}, stem = {}, ghosts = [], n, p, k;
-  for (n = 1; n <= 10; n++) {
-    p = pol(198, n * 36);
-    idx[n] = $('ring').appendChild(el('text', { x: p[0].toFixed(1), y: p[1].toFixed(1), 'class': 'idx' }, n));
-    p = pol(175, n * 36);
-    stem[n] = $('ring').appendChild(el('text', { x: p[0].toFixed(1), y: p[1].toFixed(1), 'class': 'stem' }, STEMS.charAt(n - 1)));
-  }
-  for (k = 1; k <= 9; k++) {
-    ghosts.push($('trail').appendChild(el('circle', { cx: 300, cy: 160, r: (10 - k * 0.8).toFixed(1), fill: '#5be6b3', opacity: 0 })));
-  }
-
-  /* ——— the body: bezel, fret band, graduations, groove and guilloché, painted once per size ——— */
-  var GOLD = [[0, '#f7e3a0'], [.06, '#fff6d2'], [.12, '#c9a046'], [.22, '#6f4f17'], [.3, '#b88f39'], [.38, '#f3dc96'],
-    [.46, '#9a7426'], [.5, '#5e4313'], [.56, '#c9a046'], [.62, '#fff1bf'], [.7, '#b58a33'], [.8, '#6a4b15'],
-    [.88, '#c39a41'], [.95, '#f0d88c'], [1, '#f7e3a0']];
-  function paint() {
-    var css = mount.clientWidth;
-    if (!css) return;
-    var px = Math.round(css * Math.min(window.devicePixelRatio || 1, 3));
-    if (cv.width === px) return;
-    cv.width = cv.height = px;
-    var c = cv.getContext('2d'), C = 300, i, j, a, g, q;
-    c.setTransform(px / 600, 0, 0, px / 600, 0, 0);
-    function at(r, a) { return [C + r * Math.sin(a), C - r * Math.cos(a)]; }
-    function stops(g, list) { list.forEach(function (s) { g.addColorStop(s[0], s[1]); }); return g; }
-    function conic(start) {
-      return stops(c.createConicGradient ? c.createConicGradient(start, C, C) : c.createLinearGradient(0, 0, 600, 600), GOLD);
-    }
-    function lin(list) { return stops(c.createLinearGradient(0, 0, 0, 600), list); }
-    function ring(r1, r2, fill) { c.beginPath(); c.arc(C, C, r2, 0, TAU); c.arc(C, C, r1, 0, TAU, true); c.fillStyle = fill; c.fill(); }
-    function circle(r, stroke, w) { c.beginPath(); c.arc(C, C, r, 0, TAU); c.strokeStyle = stroke; c.lineWidth = w; c.stroke(); }
-    function spoke(r1, r2, a, stroke, w) {
-      var p1 = at(r1, a), p2 = at(r2, a);
-      c.beginPath(); c.moveTo(p1[0], p1[1]); c.lineTo(p2[0], p2[1]); c.strokeStyle = stroke; c.lineWidth = w; c.stroke();
-    }
-
-    g = stops(c.createRadialGradient(C - 80, C - 110, 10, C, C, 300), [[0, '#231a12'], [.45, '#100c09'], [1, '#050403']]);
-    c.beginPath(); c.arc(C, C, 297, 0, TAU); c.fillStyle = g; c.fill();
-
-    // fluted gold bezel with two polished rims
-    ring(264, 297, conic(-2.2));
-    for (i = 0; i < 160; i++) {
-      a = i / 160 * TAU;
-      spoke(269, 292, a, 'rgba(40,24,4,.5)', 1.5);
-      spoke(269, 292, a + TAU / 320, 'rgba(255,247,214,.3)', 1);
-    }
-    ring(292.5, 297, lin([[0, '#fff4cc'], [.5, '#b98d36'], [1, '#5f4413']]));
-    ring(262, 268.5, lin([[0, '#6a4c17'], [.5, '#c79f47'], [1, '#fff0bd']]));
-    circle(261.2, 'rgba(0,0,0,.85)', 2.4);
-    circle(297, 'rgba(0,0,0,.6)', 1);
-
-    // 回纹 fret band: 72 squared spirals, mirrored in pairs
-    var N = 72, d = TAU / N, P = [[0, 0], [0, 1], [1, 1], [1, .3], [.38, .3], [.38, .68], [.7, .68]], u;
-    ring(234, 258, 'rgba(0,0,0,.4)');
-    c.beginPath();
-    for (i = 0; i < N; i++) {
-      for (j = 0; j < P.length; j++) {
-        u = i % 2 ? 1 - P[j][0] : P[j][0];
-        q = at(239.5 + P[j][1] * 13, i * d + (u * .74 + .13) * d);
-        if (j) c.lineTo(q[0], q[1]); else c.moveTo(q[0], q[1]);
-      }
-    }
-    c.strokeStyle = conic(-.9); c.lineWidth = 1.15; c.globalAlpha = .85; c.stroke(); c.globalAlpha = 1;
-    circle(235.5, 'rgba(217,181,92,.75)', 1);
-    circle(256.5, 'rgba(217,181,92,.75)', 1);
-
-    // graduations: one hundred, the tenth of each marks a number
-    circle(231, 'rgba(217,181,92,.9)', 1.2);
-    for (i = 0; i < 100; i++) {
-      a = i / 100 * TAU;
-      if (i % 10 === 0) spoke(216, 229, a, '#f5dc94', 2.4);
-      else if (i % 5 === 0) spoke(221, 229, a, '#c9a552', 1.3);
-      else spoke(224, 229, a, 'rgba(160,130,70,.75)', .9);
-    }
-
-    // the groove the jewel rides in, with a gold stud at each detent
-    ring(129, 151, stops(c.createRadialGradient(C, C, 129, C, C, 151), [[0, '#000'], [.5, '#0c0906'], [1, '#000']]));
-    circle(129, 'rgba(190,155,80,.7)', 1);
-    circle(151, 'rgba(190,155,80,.7)', 1);
-    c.fillStyle = '#d9b55c';
-    for (i = 1; i <= 10; i++) { q = at(140, i * TAU / 10); c.beginPath(); c.arc(q[0], q[1], 1.7, 0, TAU); c.fill(); }
-
-    // engine-turned rosette under the numeral
-    c.save();
-    c.beginPath(); c.arc(C, C, 121, 0, TAU); c.clip();
-    c.fillStyle = stops(c.createRadialGradient(C, C, 0, C, C, 121), [[0, '#17110b'], [1, '#080605']]);
-    c.fillRect(170, 170, 260, 260);
-    c.lineWidth = .7;
-    for (i = 0; i < 90; i++) {
-      a = i / 90 * TAU;
-      c.strokeStyle = i % 2 ? 'rgba(226,190,104,.24)' : 'rgba(255,240,190,.13)';
-      c.beginPath(); c.arc(C + 60.5 * Math.cos(a), C + 60.5 * Math.sin(a), 60.5, 0, TAU); c.stroke();
-    }
-    c.fillStyle = stops(c.createRadialGradient(C, C, 0, C, C, 121), [[0, 'rgba(8,6,4,.92)'], [.5, 'rgba(8,6,4,.62)'], [.92, 'rgba(8,6,4,0)']]);
-    c.fillRect(170, 170, 260, 260);
-    c.restore();
-    ring(120, 125.5, conic(.8));
-    circle(126, 'rgba(0,0,0,.8)', 1.2);
-    circle(119.6, 'rgba(0,0,0,.7)', 1);
-  }
-
-  /* ——— sound: a woodblock for each detent, a bronze chime in the number's own pentatonic note ——— */
-  var ac = null, master = null, wet = null, soundOn = true, lastTick = 0;
+  /* ——— sound: jade on jade, a woodblock per detent, a bronze chime in the number's own pentatonic note ——— */
+  var ac = null, master = null, wet = null, soundOn = true, lastTick = 0, lastClink = 0;
   try { if (localStorage.getItem('one-to-ten-sound') === 'off') soundOn = false; } catch (e) {}
+  var armed = false;
   function audio() {
-    if (!soundOn) return null;
+    if (!soundOn || !armed) return null;
     if (!ac) {
       try {
         var AC = window.AudioContext || window.webkitAudioContext;
@@ -484,24 +291,35 @@ p, h1, h2, ol { margin: 0; padding: 0; }
     var o = a.createOscillator(), g = a.createGain();
     o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
     g.gain.setValueAtTime(.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + .006);
+    g.gain.exponentialRampToValueAtTime(Math.max(.0002, peak), t + .006);
     g.gain.exponentialRampToValueAtTime(.0001, t + decay);
     o.connect(g); g.connect(master); if (toWet) g.connect(wet);
     o.start(t); o.stop(t + decay + .05);
     return o;
   }
-  function tick(vel) {
+  function tick(rel) {
     var now = performance.now();
     if (now - lastTick < 26) return;
     lastTick = now;
     var a = audio(); if (!a) return;
-    var v = .45 + .55 * clamp(1 - vel / 1400, 0, 1);
+    var v = .45 + .55 * clamp(1 - rel, 0, 1);
     voice(a, 1180, a.currentTime, .13 * v, .05, false).frequency.exponentialRampToValueAtTime(940, a.currentTime + .04);
     voice(a, 2360, a.currentTime, .04 * v, .025, false, 'triangle');
+  }
+  function clink(strength, low) {
+    var now = performance.now();
+    if (now - lastClink < (low ? 70 : 42)) return;
+    lastClink = now;
+    var a = audio(); if (!a) return;
+    voice(a, low ? 1500 + Math.random() * 300 : 2700 + Math.random() * 1500, a.currentTime, (low ? .022 : .05) * clamp(strength / 4, .2, 1), .07, true);
   }
   function thump() {
     var a = audio(); if (!a) return;
     voice(a, 150, a.currentTime, .5, .34, true).frequency.exponentialRampToValueAtTime(52, a.currentTime + .3);
+  }
+  function rise() {
+    var a = audio(); if (!a) return;
+    voice(a, 392, a.currentTime, .07, 1.1, true).frequency.exponentialRampToValueAtTime(1175, a.currentTime + .9);
   }
   function bell(n) {
     var a = audio(); if (!a) return;
@@ -515,6 +333,7 @@ p, h1, h2, ol { margin: 0; padding: 0; }
     $('sound').textContent = soundOn ? '钟声 · 开' : '钟声 · 关';
   }
   $('sound').addEventListener('click', function () {
+    armed = true;
     soundOn = !soundOn;
     try { localStorage.setItem('one-to-ten-sound', soundOn ? 'on' : 'off'); } catch (e) {}
     paintSound();
@@ -522,100 +341,686 @@ p, h1, h2, ol { margin: 0; padding: 0; }
   });
   paintSound();
 
-  /* ——— gold dust ——— */
-  var fx = $('fx'), fc = fx.getContext('2d'), W = 0, H = 0, motes = [], sparks = [], shock = null, lastT = 0;
-  function sizeFx() {
-    var d = Math.min(window.devicePixelRatio || 1, 2), i;
-    W = window.innerWidth; H = window.innerHeight;
-    fx.width = Math.round(W * d); fx.height = Math.round(H * d);
-    fc.setTransform(d, 0, 0, d, 0, 0);
-    motes = [];
-    for (i = 0; i < 30; i++) {
-      motes.push({ x: Math.random() * W, y: Math.random() * H, r: .5 + Math.random() * 1.1, v: 4 + Math.random() * 9, p: Math.random() * TAU, s: .4 + Math.random() * .9 });
-    }
-  }
-  function burst(n) {
-    var r = mount.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2, k = R / 250, i, a, sp;
-    for (i = 0; i < 150; i++) {
-      a = Math.random() * TAU; sp = (50 + Math.random() * Math.random() * 420) * k;
-      sparks.push({ x: cx + Math.cos(a) * R * .41, y: cy + Math.sin(a) * R * .41, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20 * k,
-        life: 0, max: .9 + Math.random() * 1.6, r: .6 + Math.random() * 1.6, p: Math.random() * TAU,
-        c: '255,' + (205 + Math.random() * 40 | 0) + ',' + (120 + Math.random() * 70 | 0) });
-    }
-    var A = n * 36 * Math.PI / 180, jx = cx + Math.sin(A) * R * .4667, jy = cy - Math.cos(A) * R * .4667;
-    for (i = 0; i < 46; i++) {
-      a = Math.random() * TAU; sp = (30 + Math.random() * 170) * k;
-      sparks.push({ x: jx, y: jy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: .6 + Math.random() * 1.1,
-        r: .6 + Math.random() * 1.3, p: Math.random() * TAU, c: '150,255,210' });
-    }
-    shock = { x: cx, y: cy, r0: R * .42, r1: R * 1.5, t: 0 };
-  }
-  function fxStep(t) {
-    var dt = Math.min(.05, (t - lastT) / 1000 || 0), i, m, s, u, drag;
-    lastT = t;
-    fc.clearRect(0, 0, W, H);
-    fc.globalCompositeOperation = 'lighter';
-    for (i = 0; i < motes.length; i++) {
-      m = motes[i];
-      m.y -= m.v * dt; m.x += Math.sin(t / 1900 + m.p) * 6 * dt;
-      if (m.y < -4) { m.y = H + 4; m.x = Math.random() * W; }
-      fc.fillStyle = 'rgba(240,205,120,' + (.1 + .16 * (.5 + .5 * Math.sin(t / 900 * m.s + m.p))).toFixed(3) + ')';
-      fc.beginPath(); fc.arc(m.x, m.y, m.r, 0, TAU); fc.fill();
-    }
-    drag = Math.exp(-2.2 * dt);
-    for (i = sparks.length - 1; i >= 0; i--) {
-      s = sparks[i];
-      s.life += dt;
-      if (s.life >= s.max) { sparks.splice(i, 1); continue; }
-      s.vx *= drag; s.vy = s.vy * drag + 26 * dt;
-      s.x += s.vx * dt; s.y += s.vy * dt;
-      u = 1 - s.life / s.max;
-      fc.fillStyle = 'rgba(' + s.c + ',' + (Math.pow(u, 1.5) * (.6 + .4 * Math.sin(t / 60 + s.p))).toFixed(3) + ')';
-      fc.beginPath(); fc.arc(s.x, s.y, s.r, 0, TAU); fc.fill();
-    }
-    if (shock) {
-      shock.t += dt; u = shock.t / 1.1;
-      if (u >= 1) shock = null;
-      else {
-        fc.strokeStyle = 'rgba(255,224,150,' + (Math.pow(1 - u, 2) * .5).toFixed(3) + ')';
-        fc.lineWidth = 1.5;
-        fc.beginPath(); fc.arc(shock.x, shock.y, shock.r0 + (shock.r1 - shock.r0) * (1 - Math.pow(1 - u, 3)), 0, TAU); fc.stroke();
-      }
-    }
-  }
-
-  /* ——— light: the gold answers the pointer, and drifts on its own when there is none ——— */
-  var lx = 0, ly = 0, tx = 0, ty = 0, lastMove = -1e9, lastKey = '';
+  /* ——— pointer: the camera leans toward it ——— */
+  var tx = 0, ty = 0, lastMove = -1e9;
   window.addEventListener('pointermove', function (e) {
     if (e.pointerType === 'touch') return;
-    var r = mount.getBoundingClientRect();
-    tx = clamp((e.clientX - r.left - r.width / 2) / (window.innerWidth * .5), -1, 1);
-    ty = clamp((e.clientY - r.top - r.height / 2) / (window.innerHeight * .5), -1, 1);
+    tx = clamp(e.clientX / window.innerWidth * 2 - 1, -1, 1);
+    ty = clamp(e.clientY / window.innerHeight * 2 - 1, -1, 1);
     lastMove = performance.now();
   }, { passive: true });
-  function lightStep(t) {
-    var gx, gy, key, st;
-    if (t - lastMove < 4000) { gx = tx; gy = ty; }
-    else { gx = Math.sin(t / 3300) * .4; gy = Math.cos(t / 4700) * .3 - .1; }
-    lx += (gx - lx) * .07; ly += (gy - ly) * .07;
-    key = lx.toFixed(3) + ',' + ly.toFixed(3);
-    if (key === lastKey) return;
-    lastKey = key;
-    st = piece.style;
-    st.setProperty('--tx', (-ly * 6).toFixed(2));
-    st.setProperty('--ty', (lx * 6).toFixed(2));
-    st.setProperty('--la', (-58 + lx * 48 - ly * 16).toFixed(1));
-    st.setProperty('--gx', (34 + lx * 20).toFixed(1) + '%');
-    st.setProperty('--gy', (20 + ly * 16).toFixed(1) + '%');
-    if (!spin) {
-      light.setAttribute('x', (190 + lx * 170).toFixed(0));
-      light.setAttribute('y', (150 + ly * 150).toFixed(0));
+
+  /* ——— glyph outlines: rasterise a numeral, trace it with marching squares, hand the contours to the extruder ——— */
+  function mk(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  function rdp(pts, eps) {
+    var n = pts.length, keep = new Uint8Array(n), stack = [[0, n - 1]], se, s, e, i, dmax, im, ax, ay, dx, dy, len, d;
+    keep[0] = keep[n - 1] = 1;
+    while (stack.length) {
+      se = stack.pop(); s = se[0]; e = se[1];
+      if (e - s < 2) continue;
+      ax = pts[s][0]; ay = pts[s][1]; dx = pts[e][0] - ax; dy = pts[e][1] - ay; len = Math.sqrt(dx * dx + dy * dy) || 1e-9;
+      dmax = 0; im = -1;
+      for (i = s + 1; i < e; i++) {
+        d = Math.abs((pts[i][0] - ax) * dy - (pts[i][1] - ay) * dx) / len;
+        if (d > dmax) { dmax = d; im = i; }
+      }
+      if (dmax > eps) { keep[im] = 1; stack.push([s, im], [im, e]); }
     }
+    return pts.filter(function (_, k) { return keep[k]; });
+  }
+  function simplifyLoop(pts, eps) {
+    var n = pts.length, far = 0, dm = 0, i, d;
+    for (i = 1; i < n; i++) {
+      d = Math.abs(pts[i][0] - pts[0][0]) + Math.abs(pts[i][1] - pts[0][1]);
+      if (d > dm) { dm = d; far = i; }
+    }
+    var A = rdp(pts.slice(0, far + 1), eps), B = rdp(pts.slice(far).concat([pts[0]]), eps);
+    return A.slice(0, -1).concat(B.slice(0, -1));
+  }
+  function loopArea(p) {
+    var s = 0, i, j, n = p.length;
+    for (i = 0; i < n; i++) { j = (i + 1) % n; s += p[i][0] * p[j][1] - p[j][0] * p[i][1]; }
+    return s / 2;
+  }
+  function inLoop(pt, poly) {
+    var c = false, i, j, n = poly.length;
+    for (i = 0, j = n - 1; i < n; j = i++) {
+      if ((poly[i][1] > pt[1]) !== (poly[j][1] > pt[1]) &&
+        pt[0] < (poly[j][0] - poly[i][0]) * (pt[1] - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0]) c = !c;
+    }
+    return c;
+  }
+  function traceGlyph(T, text) {
+    // drawn small and scaled up so the face keeps its sturdier low-optical-size hairlines
+    var F = 32, K = 7, S = F * K, pad = 10, c = mk(8, 8), g = c.getContext('2d');
+    g.font = '700 ' + F + 'px ' + NUMFONT;
+    var w = Math.ceil(g.measureText(text).width * K) + pad * 2, h = Math.ceil(S * 1.15) + pad * 2;
+    c.width = w; c.height = h; g = c.getContext('2d');
+    g.setTransform(K, 0, 0, K, 0, 0);
+    g.font = '700 ' + F + 'px ' + NUMFONT; g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
+    g.fillText(text, pad / K, (pad + S * .92) / K);
+    var img = g.getImageData(0, 0, w, h).data, f = new Float32Array(w * h), i, x, y, idx, a, b, cc, d, code;
+    for (i = 0; i < w * h; i++) f[i] = img[i * 4 + 3] / 255;
+    var segs = new Map();
+    function add(k1, px, py, k2) { segs.set(k1, { to: k2, x: px, y: py }); }
+    for (y = 0; y < h - 1; y++) {
+      for (x = 0; x < w - 1; x++) {
+        idx = y * w + x; a = f[idx]; b = f[idx + 1]; cc = f[idx + w + 1]; d = f[idx + w];
+        code = (a >= .5 ? 1 : 0) | (b >= .5 ? 2 : 0) | (cc >= .5 ? 4 : 0) | (d >= .5 ? 8 : 0);
+        if (code === 0 || code === 15) continue;
+        var kT = idx * 2, kL = idx * 2 + 1, kR = (idx + 1) * 2 + 1, kB = (idx + w) * 2;
+        var tX = x + (.5 - a) / (b - a), rY = y + (.5 - b) / (cc - b), bX = x + (.5 - d) / (cc - d), lY = y + (.5 - a) / (d - a);
+        switch (code) {
+          case 1: add(kT, tX, y, kL); break;
+          case 2: add(kR, x + 1, rY, kT); break;
+          case 4: add(kB, bX, y + 1, kR); break;
+          case 8: add(kL, x, lY, kB); break;
+          case 3: add(kR, x + 1, rY, kL); break;
+          case 6: add(kB, bX, y + 1, kT); break;
+          case 12: add(kL, x, lY, kR); break;
+          case 9: add(kT, tX, y, kB); break;
+          case 14: add(kL, x, lY, kT); break;
+          case 13: add(kT, tX, y, kR); break;
+          case 11: add(kR, x + 1, rY, kB); break;
+          case 7: add(kB, bX, y + 1, kL); break;
+          case 5: add(kT, tX, y, kL); add(kB, bX, y + 1, kR); break;
+          case 10: add(kR, x + 1, rY, kT); add(kL, x, lY, kB); break;
+        }
+      }
+    }
+    var loops = [], used = new Set();
+    segs.forEach(function (_, k0) {
+      if (used.has(k0)) return;
+      var pts = [], k = k0, s, guard = 0;
+      while (!used.has(k) && guard++ < 200000) {
+        used.add(k); s = segs.get(k);
+        if (!s) break;
+        pts.push([s.x, s.y]); k = s.to;
+      }
+      if (pts.length > 10) {
+        pts = simplifyLoop(pts, .35).map(function (p) { return [(p[0] - w / 2) / S, -(p[1] - h / 2) / S]; });
+        if (pts.length > 2) loops.push({ pts: pts, a: loopArea(pts) });
+      }
+    });
+    if (!loops.length) return [];
+    loops.sort(function (p, q) { return Math.abs(q.a) - Math.abs(p.a); });
+    var sign = loops[0].a > 0, outers = loops.filter(function (l) { return (l.a > 0) === sign; });
+    function v2(p) { return new T.Vector2(p[0], p[1]); }
+    outers.forEach(function (o) { o.shape = new T.Shape(o.pts.map(v2)); });
+    loops.forEach(function (l) {
+      if ((l.a > 0) === sign) return;
+      var best = null;
+      outers.forEach(function (o) { if (inLoop(l.pts[0], o.pts) && (!best || Math.abs(o.a) < Math.abs(best.a))) best = o; });
+      if (best) best.shape.holes.push(new T.Path(l.pts.map(v2)));
+    });
+    return outers.map(function (o) { return o.shape; });
+  }
+  // smooth shading along the curves, hard edges at the bevels and corners
+  function creaseNormals(T, geo, cosT) {
+    var pos = geo.attributes.position.array, n = pos.length / 3, out = new Float32Array(n * 3), fn = new Float32Array(n), map = new Map(), f, i, k, list;
+    var ax, ay, az, bx, by, bz, cx, cy, cz, l;
+    for (f = 0; f < n / 3; f++) {
+      i = f * 9;
+      ax = pos[i + 3] - pos[i]; ay = pos[i + 4] - pos[i + 1]; az = pos[i + 5] - pos[i + 2];
+      bx = pos[i + 6] - pos[i]; by = pos[i + 7] - pos[i + 1]; bz = pos[i + 8] - pos[i + 2];
+      cx = ay * bz - az * by; cy = az * bx - ax * bz; cz = ax * by - ay * bx;
+      fn[f * 3] = cx; fn[f * 3 + 1] = cy; fn[f * 3 + 2] = cz;
+      for (k = 0; k < 3; k++) {
+        var key = Math.round(pos[i + k * 3] * 2e4) + '_' + Math.round(pos[i + k * 3 + 1] * 2e4) + '_' + Math.round(pos[i + k * 3 + 2] * 2e4);
+        list = map.get(key); if (!list) { list = []; map.set(key, list); }
+        list.push(f);
+      }
+    }
+    for (i = 0; i < n; i++) {
+      f = Math.floor(i / 3);
+      ax = fn[f * 3]; ay = fn[f * 3 + 1]; az = fn[f * 3 + 2]; l = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+      ax /= l; ay /= l; az /= l;
+      list = map.get(Math.round(pos[i * 3] * 2e4) + '_' + Math.round(pos[i * 3 + 1] * 2e4) + '_' + Math.round(pos[i * 3 + 2] * 2e4));
+      cx = cy = cz = 0;
+      for (k = 0; k < list.length; k++) {
+        bx = fn[list[k] * 3]; by = fn[list[k] * 3 + 1]; bz = fn[list[k] * 3 + 2]; l = Math.sqrt(bx * bx + by * by + bz * bz) || 1;
+        if ((bx * ax + by * ay + bz * az) / l > cosT) { cx += bx; cy += by; cz += bz; }
+      }
+      l = Math.sqrt(cx * cx + cy * cy + cz * cz) || 1;
+      out[i * 3] = cx / l; out[i * 3 + 1] = cy / l; out[i * 3 + 2] = cz / l;
+    }
+    geo.setAttribute('normal', new T.BufferAttribute(out, 3));
+  }
+
+  /* ——— the instrument ——— */
+  function initGL() {
+    var T = window.THREE;
+    if (!T) return null;
+    var host = $('scene'), canvas = $('gl'), renderer;
+    try { renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { return null; }
+    renderer.outputEncoding = T.sRGBEncoding;
+    renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.setClearColor(new T.Color(.0032, .0026, .0022), 1);
+    var aniso = renderer.capabilities.getMaxAnisotropy();
+    var scene = new T.Scene(), camera = new T.PerspectiveCamera(30, 1, .1, 80), i, n, m;
+
+    // a studio of light panels, baked into the reflections every metal and glass surface carries
+    var envScene = new T.Scene();
+    envScene.add(new T.Mesh(new T.BoxGeometry(60, 60, 60), new T.MeshBasicMaterial({ color: new T.Color(.12, .09, .06), side: T.BackSide, toneMapped: false })));
+    function panel(w, h, r, g, b, x, y, z) {
+      var p = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ color: new T.Color(r, g, b), side: T.DoubleSide, toneMapped: false }));
+      p.position.set(x, y, z); p.lookAt(0, 0, 0); envScene.add(p);
+    }
+    panel(16, 9, 7, 6.4, 5.4, -9, 13, 11);
+    panel(6, 18, 3.4, 2.6, 1.6, 18, 3, 3);
+    panel(5, 16, 1, 1.5, 2.4, -19, 2, -7);
+    panel(12, 3, 10, 10, 10, 2, 16, -11);
+    panel(20, 6, 1.1, .6, .25, 0, -14, 9);
+    panel(3, 3, 14, 13, 11, 7, 7, 15);
+    panel(26, 14, 1.5, 1.25, .9, 0, 2, 24);
+    scene.environment = new T.PMREMGenerator(renderer).fromScene(envScene, .03).texture;
+    var cubeRT = new T.WebGLCubeRenderTarget(256, { type: T.HalfFloatType });
+    new T.CubeCamera(.1, 100, cubeRT).update(renderer, envScene);
+
+    var key = new T.SpotLight(0xfff2dd, 1.5, 0, .44, .7);
+    key.position.set(-4.5, 8.5, 6.5); key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -.0006; key.shadow.normalBias = .02;
+    key.shadow.camera.near = 3; key.shadow.camera.far = 24;
+    scene.add(key, key.target);
+    var rim = new T.DirectionalLight(0x9db8ff, .45); rim.position.set(5, 3, -6); scene.add(rim);
+    scene.add(new T.HemisphereLight(0x40321f, 0x050403, .35));
+    var inner = new T.PointLight(0xffcf8a, .7, 3.4, 2); inner.position.set(0, .2, 0); scene.add(inner);
+
+    var gold = new T.MeshStandardMaterial({ color: 0xffb845, metalness: 1, roughness: .2, envMapIntensity: 1.25 });
+    var goldSatin = new T.MeshStandardMaterial({ color: 0xffb845, metalness: 1, roughness: .36, envMapIntensity: 1.1 });
+    var goldMirror = new T.MeshStandardMaterial({ color: 0xffbb4c, metalness: 1, roughness: .12, envMapIntensity: 1.5 });
+    var lacquer = new T.MeshPhysicalMaterial({ color: 0x040302, metalness: 0, roughness: .34, clearcoat: 1, clearcoatRoughness: .06, envMapIntensity: 1.1 });
+    function add(geo, mat, x, y, z, parent) {
+      var o = new T.Mesh(geo, mat);
+      o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true;
+      (parent || scene).add(o);
+      return o;
+    }
+
+    // floor, fading into the dark
+    var fc = mk(256, 256), fg = fc.getContext('2d'), grad = fg.createRadialGradient(128, 128, 0, 128, 128, 128);
+    grad.addColorStop(0, '#fff'); grad.addColorStop(.45, '#bbb'); grad.addColorStop(1, '#000');
+    fg.fillStyle = grad; fg.fillRect(0, 0, 256, 256);
+    var floor = add(new T.CircleGeometry(4.6, 72), new T.MeshStandardMaterial({ color: 0x060504, roughness: .3, metalness: 0, envMapIntensity: .7, transparent: true, alphaMap: new T.CanvasTexture(fc) }), 0, -2.15, 0);
+    floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+
+    // an aureole of hairline rings behind everything
+    var hc = mk(1024, 1024), hg = hc.getContext('2d');
+    grad = hg.createRadialGradient(512, 512, 0, 512, 512, 512);
+    grad.addColorStop(0, 'rgba(150,100,36,.5)'); grad.addColorStop(.5, 'rgba(90,58,20,.16)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    hg.fillStyle = grad; hg.fillRect(0, 0, 1024, 1024);
+    for (i = 3; i < 17; i++) {
+      hg.strokeStyle = 'rgba(230,190,100,' + (.22 * (1 - i / 17)).toFixed(3) + ')'; hg.lineWidth = 1.2;
+      hg.beginPath(); hg.arc(512, 512, i * 30, 0, TAU); hg.stroke();
+    }
+    var halo = new T.Mesh(new T.PlaneGeometry(17, 17), new T.MeshBasicMaterial({ map: new T.CanvasTexture(hc), transparent: true, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: .26 }));
+    halo.position.set(0, .3, -5); scene.add(halo);
+
+    // lathe-turned lacquer pedestal with gold bands
+    var prof = [[0, -2.15], [1.22, -2.15], [1.24, -2.12], [1.24, -2.06], [1.2, -2.03], [1.12, -2], [1.08, -1.93], [.86, -1.86], [.6, -1.8], [.44, -1.74], [.36, -1.68], [.34, -1.62], [0, -1.62]];
+    add(new T.LatheGeometry(prof.map(function (p) { return new T.Vector2(p[0], p[1]); }), 96), lacquer);
+    function hoop(r, tube, y, mat) { var o = add(new T.TorusGeometry(r, tube, 14, 160), mat || gold, 0, y, 0); o.rotation.x = Math.PI / 2; return o; }
+    hoop(1.24, .03, -2.09); hoop(1.08, .018, -1.94); hoop(.36, .03, -1.67);
+    add(new T.SphereGeometry(.11, 32, 24), gold, 0, -1.62, 0);
+
+    // the cradle: a half meridian, two finials, a fixed horizon ring carrying the jade index
+    add(new T.TorusGeometry(1.62, .035, 16, 140, Math.PI), gold).rotation.z = Math.PI;
+    [-1, 1].forEach(function (s) {
+      add(new T.SphereGeometry(.075, 24, 18), gold, s * 1.62, 0, 0);
+      add(new T.CylinderGeometry(.015, .015, .16, 12), goldSatin, s * 1.55, 0, 0).rotation.z = Math.PI / 2;
+    });
+    hoop(1.612, .016, -.24, goldSatin);
+    var gemMat = new T.MeshStandardMaterial({ color: 0x0c6b4a, emissive: 0x1fbf85, emissiveIntensity: .5, roughness: .12, metalness: 0 });
+    add(new T.SphereGeometry(.05, 24, 18), gemMat, 0, -.24, 1.612);
+    add(new T.ConeGeometry(.034, .07, 4), gold, 0, -.19, 1.6);
+
+    // the numbered band: black lacquer, numerals and heavenly stems inlaid in gold
+    var BW = 4096, BH = 132, bc = mk(BW, BH), bg = bc.getContext('2d'), bm = mk(BW, BH), bh = bm.getContext('2d');
+    bg.fillStyle = '#0c0a08'; bg.fillRect(0, 0, BW, BH);
+    bh.fillStyle = 'rgb(0,62,0)'; bh.fillRect(0, 0, BW, BH);
+    [[bg, '#ffe29d', '#b99a55'], [bh, 'rgb(0,74,255)', 'rgb(0,74,255)']].forEach(function (s) {
+      var ctx = s[0], x, k;
+      ctx.fillStyle = s[1]; ctx.fillRect(0, 6, BW, 3); ctx.fillRect(0, BH - 9, BW, 3);
+      for (k = 0; k < 100; k++) {
+        x = k / 100 * BW;
+        if (k % 10 === 0) { ctx.fillStyle = s[1]; ctx.fillRect(x - 2, BH - 30, 4, 18); }
+        else { ctx.fillStyle = s[2]; ctx.fillRect(x - 1, BH - 22, 2, 10); }
+      }
+      ctx.textBaseline = 'alphabetic';
+      for (k = 1; k <= 10; k++) {
+        (k === 10 ? [0, BW] : [k / 10 * BW]).forEach(function (cx) {
+          ctx.textAlign = 'center'; ctx.fillStyle = s[1]; ctx.font = '600 76px ' + NUMFONT; ctx.fillText(k, cx, 86);
+          ctx.textAlign = 'left'; ctx.fillStyle = s[2]; ctx.font = '900 26px ' + CNFONT; ctx.fillText(STEMS.charAt(k - 1), cx + (k === 10 ? 54 : 34), 84);
+        });
+      }
+    });
+    var bandMap = new T.CanvasTexture(bc), bandMR = new T.CanvasTexture(bm);
+    bandMap.encoding = T.sRGBEncoding; bandMap.anisotropy = bandMR.anisotropy = aniso;
+    var band = new T.Group(); scene.add(band);
+    add(new T.CylinderGeometry(1.48, 1.48, .3, 200, 1, true), new T.MeshPhysicalMaterial({ map: bandMap, metalnessMap: bandMR, roughnessMap: bandMR, metalness: 1, roughness: 1, clearcoat: .8, clearcoatRoughness: .08, side: T.DoubleSide, envMapIntensity: 1.2 }), 0, 0, 0, band);
+    [-.15, .15].forEach(function (y) { var o = add(new T.TorusGeometry(1.48, .014, 10, 200), gold, 0, y, 0, band); o.rotation.x = Math.PI / 2; });
+
+    // two tilted rings that precess around the orb
+    var gyro = [new T.Group(), new T.Group()];
+    scene.add(gyro[0], gyro[1]);
+    add(new T.TorusGeometry(1.33, .02, 12, 180), goldMirror, 0, 0, 0, gyro[0]).rotation.x = 28 * Math.PI / 180;
+    add(new T.TorusGeometry(1.22, .017, 12, 180), goldMirror, 0, 0, 0, gyro[1]).rotation.x = 52 * Math.PI / 180;
+
+    // the crystal orb, open at the pole, with a gold collar
+    var glassMat = new T.ShaderMaterial({
+      uniforms: { env: { value: cubeRT.texture }, gain: { value: 1 } },
+      vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = cameraPosition - wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }',
+      fragmentShader: 'uniform samplerCube env; uniform float gain; varying vec3 vN; varying vec3 vV; void main(){ vec3 N = normalize(vN); vec3 V = normalize(vV); if (!gl_FrontFacing) N = -N; float f = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.2); vec3 c = textureCube(env, reflect(-V, N)).rgb; vec3 col = c * (0.05 + 0.95 * f) + vec3(1.0, 0.86, 0.6) * f * 0.1; col = 1.0 - exp(-col * 0.7 * gain); if (!gl_FrontFacing) col *= 0.35; gl_FragColor = vec4(col, 1.0); }',
+      transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide
+    });
+    var orb = new T.Mesh(new T.SphereGeometry(1, 96, 64, 0, TAU, .273, Math.PI - .273), glassMat);
+    orb.renderOrder = 2; scene.add(orb);
+    hoop(.27, .034, .962);
+    add(new T.CylinderGeometry(.27, .27, .1, 48, 1, true), new T.MeshStandardMaterial({ color: 0xffb845, metalness: 1, roughness: .25, side: T.DoubleSide }), 0, 1.01, 0);
+
+    // ten jade spheres, each with its numeral and stem set in a gold roundel
+    var BR = .23, CR = 1 - BR - .012, DD = 4 * BR * BR, balls = [null], ballGeo = new T.SphereGeometry(BR, 56, 40);
+    function ballMaps(k) {
+      var c = mk(512, 256), g = c.getContext('2d'), mm = mk(512, 256), h = mm.getContext('2d'), j, x, y, r, rg;
+      rg = g.createLinearGradient(0, 0, 0, 256);
+      rg.addColorStop(0, '#2aa27a'); rg.addColorStop(.5, '#0f7552'); rg.addColorStop(1, '#064531');
+      g.fillStyle = rg; g.fillRect(0, 0, 512, 256);
+      for (j = 0; j < 30; j++) {
+        x = Math.random() * 512; y = Math.random() * 256; r = 18 + Math.random() * 70;
+        rg = g.createRadialGradient(x, y, 0, x, y, r);
+        rg.addColorStop(0, Math.random() < .55 ? 'rgba(170,240,205,.2)' : 'rgba(2,30,20,.36)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      h.fillStyle = 'rgb(0,46,0)'; h.fillRect(0, 0, 512, 256);
+      [[g, '#ffe29d'], [h, 'rgb(0,70,255)']].forEach(function (s) {
+        var ctx = s[0];
+        ctx.fillStyle = ctx.strokeStyle = s[1];
+        [128, 384].forEach(function (cx) {
+          // roundel drawn as a true circle on the sphere, so it is widened toward the poles here
+          [[66, 5], [58, 1.6]].forEach(function (ring) {
+            var q, lat;
+            ctx.lineWidth = ring[1]; ctx.beginPath();
+            for (q = 0; q <= 72; q++) {
+              lat = ring[0] * Math.sin(q / 72 * TAU) / 256 * Math.PI;
+              ctx.lineTo(cx + ring[0] * Math.cos(q / 72 * TAU) / Math.cos(lat), 128 - ring[0] * Math.sin(q / 72 * TAU));
+            }
+            ctx.closePath(); ctx.stroke();
+          });
+          ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+          ctx.font = '700 ' + (k === 10 ? 66 : 78) + 'px ' + NUMFONT; ctx.fillText(k, cx, 150);
+          ctx.save(); ctx.translate(cx, 176); ctx.scale(1.22, 1);
+          ctx.font = '900 18px ' + CNFONT; ctx.fillText(STEMS.charAt(k - 1), 0, 0);
+          ctx.restore();
+        });
+      });
+      var a = new T.CanvasTexture(c), b = new T.CanvasTexture(mm);
+      a.encoding = T.sRGBEncoding; a.anisotropy = b.anisotropy = aniso;
+      return [a, b];
+    }
+    for (n = 1; n <= 10; n++) {
+      var maps = ballMaps(n);
+      m = add(ballGeo, new T.MeshPhysicalMaterial({ map: maps[0], metalnessMap: maps[1], roughnessMap: maps[1], metalness: 1, roughness: 1, clearcoat: 1, clearcoatRoughness: .08, envMapIntensity: 1.15, emissive: new T.Color(0, .016, .01) }));
+      balls.push({ n: n, mesh: m, p: m.position, v: new T.Vector3(), mode: 'dyn', t: 0, s: 1, k0: new T.Vector3() });
+    }
+
+    // the numerals themselves: extruded, bevelled gold
+    var numGeo = [null], numMat = new T.MeshStandardMaterial({ color: 0xffbb4c, metalness: 1, roughness: .13, envMapIntensity: 1.55 });
+    for (n = 1; n <= 10; n++) {
+      var shapes = traceGlyph(T, String(n)), geo;
+      if (shapes.length) {
+        geo = new T.ExtrudeGeometry(shapes, { depth: .15, bevelEnabled: true, bevelThickness: .022, bevelSize: .009, bevelSegments: 2, curveSegments: 1, steps: 1 });
+        creaseNormals(T, geo, Math.cos(14 * Math.PI / 180));
+      } else {
+        geo = new T.TorusGeometry(.3, .08, 12, 48);
+      }
+      geo.center(); geo.computeBoundingBox();
+      geo.scale(1.05 / (geo.boundingBox.max.y - geo.boundingBox.min.y), 1.05 / (geo.boundingBox.max.y - geo.boundingBox.min.y), 1.05 / (geo.boundingBox.max.y - geo.boundingBox.min.y));
+      numGeo.push(geo);
+    }
+    var numG = new T.Group(), numMesh = new T.Mesh(numGeo[1], numMat);
+    numMesh.castShadow = true; numG.add(numMesh); numG.position.set(0, 1.72, 0); numG.scale.setScalar(.0001); scene.add(numG);
+
+    // light that is only light: a flash, a burst of gold dust, motes in the air
+    var sc = mk(64, 64), sg = sc.getContext('2d');
+    grad = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(.25, 'rgba(255,240,200,.6)'); grad.addColorStop(1, 'rgba(255,220,150,0)');
+    sg.fillStyle = grad; sg.fillRect(0, 0, 64, 64);
+    var spark = new T.CanvasTexture(sc);
+    var flash = new T.Sprite(new T.SpriteMaterial({ map: spark, color: 0xffe2a0, blending: T.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, opacity: 0 }));
+    flash.position.set(0, 1.72, 0); scene.add(flash);
+    function points(count, size) {
+      var g = new T.BufferGeometry();
+      g.setAttribute('position', new T.BufferAttribute(new Float32Array(count * 3), 3));
+      g.setAttribute('color', new T.BufferAttribute(new Float32Array(count * 3), 3));
+      var p = new T.Points(g, new T.PointsMaterial({ size: size, map: spark, vertexColors: true, blending: T.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, sizeAttenuation: true }));
+      p.frustumCulled = false; scene.add(p);
+      return p;
+    }
+    var DN = 240, dust = points(DN, .05), dustP = dust.geometry.attributes.position.array, dustC = dust.geometry.attributes.color.array, dustS = [];
+    for (i = 0; i < DN; i++) {
+      dustP[i * 3] = (Math.random() - .5) * 12; dustP[i * 3 + 1] = -2 + Math.random() * 6.5; dustP[i * 3 + 2] = -4 + Math.random() * 7;
+      dustS.push([.03 + Math.random() * .08, Math.random() * TAU, .4 + Math.random()]);
+    }
+    var PN = 560, burstPts = points(PN, .075), bP = burstPts.geometry.attributes.position.array, bC = burstPts.geometry.attributes.color.array, bV = new Float32Array(PN * 3), bL = new Float32Array(PN * 2), burstOn = false;
+    function burst() {
+      var k, a, u, sp;
+      for (k = 0; k < PN; k++) {
+        a = Math.random() * TAU; u = Math.random() * 2 - 1; sp = (.5 + Math.random() * Math.random() * 3.6);
+        bP[k * 3] = 0; bP[k * 3 + 1] = 1.72; bP[k * 3 + 2] = 0;
+        bV[k * 3] = Math.cos(a) * Math.sqrt(1 - u * u) * sp; bV[k * 3 + 1] = u * sp + .4; bV[k * 3 + 2] = Math.sin(a) * Math.sqrt(1 - u * u) * sp;
+        bL[k * 2] = 0; bL[k * 2 + 1] = .7 + Math.random() * 1.7;
+      }
+      burstOn = true;
+    }
+
+    // bloom, vignette and a breath of grain
+    var composer = null, bloom = null, finalPass = null;
+    try {
+      if (T.EffectComposer && T.RenderPass && T.ShaderPass && T.UnrealBloomPass && renderer.capabilities.isWebGL2) {
+        var hf = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
+        composer = new T.EffectComposer(renderer, new T.WebGLRenderTarget(4, 4, { type: hf ? T.HalfFloatType : T.UnsignedByteType, samples: 4 }));
+        composer.addPass(new T.RenderPass(scene, camera));
+        bloom = new T.UnrealBloomPass(new T.Vector2(256, 256), .5, .7, .84);
+        if (hf) [bloom.renderTargetBright].concat(bloom.renderTargetsHorizontal, bloom.renderTargetsVertical).forEach(function (r) { r.texture.type = T.HalfFloatType; });
+        composer.addPass(bloom);
+        finalPass = new T.ShaderPass({
+          uniforms: { tDiffuse: { value: null }, time: { value: 0 } },
+          vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+          fragmentShader: 'uniform sampler2D tDiffuse; uniform float time; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); } void main(){ vec3 col = texture2D(tDiffuse, vUv).rgb; vec2 q = vUv - 0.5; col *= 1.0 - dot(q, q) * 0.5; col = LinearTosRGB(vec4(max(col, 0.0), 1.0)).rgb; col += (h(vUv * vec2(1913.0, 1087.0) + time) - 0.5) * (2.0 / 255.0); gl_FragColor = vec4(col, 1.0); }'
+        });
+        composer.addPass(finalPass);
+      }
+    } catch (e) { composer = null; }
+
+    var quality = Math.min(window.devicePixelRatio || 1, 1.5), D0 = 10;
+    function resize() {
+      var w = host.clientWidth, h = host.clientHeight;
+      if (!w || !h) return;
+      var reserve = window.matchMedia('(max-width: 1099px)').matches ? 0 : 124, pr = Math.min(window.devicePixelRatio || 1, quality), tan = Math.tan(15 * Math.PI / 180);
+      renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
+      if (composer) { composer.setPixelRatio(pr); composer.setSize(w, h); }
+      D0 = Math.max(2.36 * h / ((h - reserve) * tan), 1.84 * h / (w * tan));
+      camera.setViewOffset(w, h, 0, reserve / 2, w, h);
+    }
+
+    /* ——— motion ——— */
+    var H = new T.Vector3(0, 1.72, 0), A = new T.Vector3(0, .3, 0), tmpV = new T.Vector3(), tmpQ = new T.Quaternion(), tmpO = new T.Object3D(), axis = new T.Vector3();
+    var S = { phase: 'idle', t0: 0, t1: 0, n: 0, from: 0, to: 0, cb: null };
+    var current = 0, bandP = 0, lastIdx = -1, mix = 0, speedRel = 0, ringAng = [.6, 2.1];
+    var numS = 0, numGoal = 0, numSpin = 0, flashT = -1, pulse = 0, gemGlow = 0, clock = 0, acc = 0, last = 0, frames = 0, slow = 0, tuned = 0;
+    var cam = { yaw: 0, pitch: .1, dist: 0, y: .06 };
+
+    function physics(dt) {
+      var p, q, a, b, h, dx, dy, dz, d, nx, ny, nz, vn, ov, imp, ax, ay, az;
+      for (p = 1; p <= 10; p++) {
+        a = balls[p];
+        if (a.mode !== 'dyn') continue;
+        ax = 0; ay = -14; az = 0;
+        if (mix > .001) {
+          h = Math.sqrt(a.p.x * a.p.x + a.p.z * a.p.z) + 1e-4;
+          ax += mix * (-a.p.z / h * 8 - a.p.x / h * 3 + (Math.random() - .5) * 12);
+          az += mix * (a.p.x / h * 8 - a.p.z / h * 3 + (Math.random() - .5) * 12);
+          ay += mix * ((h < .4 && a.p.y < .3 ? 34 : 5) + (Math.random() - .5) * 12);
+        }
+        a.v.x += ax * dt; a.v.y += ay * dt; a.v.z += az * dt;
+        a.v.multiplyScalar(1 - .3 * dt);
+        d = a.v.length(); if (d > 5.5) a.v.multiplyScalar(5.5 / d);
+        a.p.addScaledVector(a.v, dt);
+      }
+      for (p = 1; p < 10; p++) {
+        a = balls[p];
+        if (a.mode === 'out') continue;
+        for (q = p + 1; q <= 10; q++) {
+          b = balls[q];
+          if (b.mode === 'out' || (a.mode !== 'dyn' && b.mode !== 'dyn')) continue;
+          dx = b.p.x - a.p.x; dy = b.p.y - a.p.y; dz = b.p.z - a.p.z; d = dx * dx + dy * dy + dz * dz;
+          if (d >= DD || d < 1e-8) continue;
+          d = Math.sqrt(d); nx = dx / d; ny = dy / d; nz = dz / d; ov = 2 * BR - d;
+          if (a.mode === 'dyn' && b.mode === 'dyn') {
+            a.p.x -= nx * ov * .5; a.p.y -= ny * ov * .5; a.p.z -= nz * ov * .5;
+            b.p.x += nx * ov * .5; b.p.y += ny * ov * .5; b.p.z += nz * ov * .5;
+            vn = (b.v.x - a.v.x) * nx + (b.v.y - a.v.y) * ny + (b.v.z - a.v.z) * nz;
+            if (vn < 0) {
+              imp = -(1 + (vn < -.6 ? .86 : 0)) * vn * .5;
+              a.v.x -= nx * imp; a.v.y -= ny * imp; a.v.z -= nz * imp;
+              b.v.x += nx * imp; b.v.y += ny * imp; b.v.z += nz * imp;
+              if (vn < -1.3) clink(-vn, false);
+            }
+          } else if (a.mode === 'dyn') {
+            a.p.x -= nx * ov; a.p.y -= ny * ov; a.p.z -= nz * ov;
+            vn = a.v.x * nx + a.v.y * ny + a.v.z * nz;
+            if (vn > 0) { a.v.x -= nx * vn * 1.5; a.v.y -= ny * vn * 1.5; a.v.z -= nz * vn * 1.5; }
+          } else {
+            b.p.x += nx * ov; b.p.y += ny * ov; b.p.z += nz * ov;
+            vn = b.v.x * nx + b.v.y * ny + b.v.z * nz;
+            if (vn < 0) { b.v.x -= nx * vn * 1.5; b.v.y -= ny * vn * 1.5; b.v.z -= nz * vn * 1.5; }
+          }
+        }
+      }
+      for (p = 1; p <= 10; p++) {
+        a = balls[p];
+        if (a.mode !== 'dyn') continue;
+        d = a.p.length();
+        if (d > CR) {
+          nx = a.p.x / d; ny = a.p.y / d; nz = a.p.z / d;
+          a.p.set(nx * CR, ny * CR, nz * CR);
+          vn = a.v.x * nx + a.v.y * ny + a.v.z * nz;
+          if (vn > 0) {
+            imp = (1 + (vn > .7 ? .72 : 0)) * vn;
+            a.v.x -= nx * imp; a.v.y -= ny * imp; a.v.z -= nz * imp;
+            if (vn > 1.6) clink(vn, true);
+          }
+          if (mix < .05) a.v.multiplyScalar(1 - 3.2 * dt);
+        }
+      }
+    }
+
+    function showNumeral(k, instant) {
+      numMesh.geometry = numGeo[k];
+      numGoal = 1;
+      if (instant) { numS = 1; numSpin = 0; } else { numS = 0; numSpin = 1; }
+    }
+    function release(b) { b.mode = 'dyn'; b.s = 1; b.mesh.visible = true; b.p.set(0, .45, 0); b.v.set((Math.random() - .5) * .6, -3, (Math.random() - .5) * .6); }
+    function hideBall(b) { b.mode = 'out'; }
+
+    function reveal() {
+      var b = balls[S.n], cb = S.cb;
+      hideBall(b);
+      current = S.n; bandP = S.to; S.phase = 'idle'; S.cb = null;
+      showNumeral(S.n, false);
+      flashT = 0; pulse = 1; gemGlow = 1;
+      burst();
+      if (cb) cb();
+    }
+
+    var api = {
+      begin: function (k, cb) {
+        if (current) { numGoal = 0; var b = balls[current]; b.mode = 'ret'; b.t = 0; b.s = 0; b.mesh.visible = true; b.p.copy(H); b.v.set(0, 0, 0); current = 0; }
+        S.phase = 'spin'; S.t0 = clock; S.n = k; S.cb = cb;
+        S.from = bandP; S.to = bandP + ((k - bandP) % 10 + 10) % 10 + 30;
+      },
+      skip: function () {
+        var p;
+        if (S.phase === 'idle') return;
+        for (p = 1; p <= 10; p++) if (balls[p].mode === 'ret' || (balls[p].mode === 'kin' && p !== S.n)) release(balls[p]);
+        mix = 0; speedRel = 0;
+        reveal();
+      },
+      set: function (k) {
+        var p;
+        for (p = 1; p <= 10; p++) if (balls[p].mode !== 'dyn') release(balls[p]);
+        balls[k].mode = 'out'; balls[k].s = 0; balls[k].mesh.visible = false;
+        current = k; bandP = Math.round(bandP / 10) * 10 + k; S.phase = 'idle';
+        showNumeral(k, true);
+        for (p = 0; p < 360; p++) physics(1 / 120);
+      }
+    };
+
+    function step(dt) {
+      var p, b, e, u, g, idx, k;
+      clock += dt;
+
+      // the band turns and slows; the orb churns with it
+      if (S.phase === 'spin') {
+        e = clock - S.t0; u = e / 3.6;
+        if (u < 1) {
+          bandP = S.from + (S.to - S.from) * (1 - Math.pow(1 - u, 2.6));
+          speedRel = Math.pow(1 - u, 1.6);
+          mix = Math.min(1, e / .4) * clamp((3.25 - e) / .6, 0, 1);
+        } else {
+          bandP = S.to; speedRel = 0; mix = 0;
+          b = balls[S.n];
+          if (b.mode !== 'dyn') release(b);
+          b.mode = 'kin'; b.k0.copy(b.p); b.v.set(0, 0, 0);
+          S.phase = 'gather'; S.t1 = clock; gemGlow = 1;
+          rise();
+        }
+      } else if (S.phase !== 'idle') {
+        e = clock - S.t1; b = balls[S.n];
+        bandP = S.to + (e < .46 ? .042 * Math.exp(-4.5 * e / .46) * Math.sin(e / .46 * Math.PI * 3) : 0);
+        if (S.phase === 'gather') {
+          g = Math.min(1, e / .5); g = g * g * (3 - 2 * g);
+          b.p.lerpVectors(b.k0, A, g);
+          if (e >= .5) S.phase = 'rise';
+        } else if (S.phase === 'rise') {
+          g = Math.min(1, (e - .5) / .85); g = 1 - Math.pow(1 - g, 3);
+          b.p.lerpVectors(A, H, g);
+          if (e >= 1.35) S.phase = 'hold';
+        } else if (e >= 1.85) {
+          reveal();
+        }
+        if (S.phase !== 'idle') {
+          tmpO.position.copy(b.p); tmpO.lookAt(camera.position);
+          b.mesh.quaternion.slerp(tmpO.quaternion, 1 - Math.exp(-7 * dt));
+        }
+      }
+      idx = ((Math.round(bandP) % 10) + 10) % 10;
+      if (idx !== lastIdx) { if (lastIdx >= 0 && S.phase === 'spin') tick(speedRel); lastIdx = idx; }
+      band.rotation.y = -bandP / 10 * TAU;
+
+      // the previous number's sphere reappears at the pole and drops back in
+      for (p = 1; p <= 10; p++) {
+        b = balls[p];
+        if (b.mode === 'ret') {
+          b.t += dt;
+          b.s = Math.min(1, b.t / .22);
+          if (b.t > .22) { u = Math.min(1, (b.t - .22) / .42); b.p.y = H.y + (.5 - H.y) * u * u; }
+          if (b.t >= .64) { b.mode = 'dyn'; b.v.set(0, -3.4, 0); }
+        } else if (b.mode === 'out') {
+          b.s = Math.max(0, b.s - dt / .16);
+          if (b.s <= 0) b.mesh.visible = false;
+        }
+        b.mesh.scale.setScalar(Math.max(.0001, b.s));
+      }
+
+      acc = Math.min(acc + dt, .05);
+      while (acc >= 1 / 120) { physics(1 / 120); acc -= 1 / 120; }
+      for (p = 1; p <= 10; p++) {
+        b = balls[p];
+        if (b.mode !== 'dyn') continue;
+        u = b.v.length();
+        if (u > .04) {
+          tmpV.copy(b.p).normalize().negate();
+          axis.crossVectors(tmpV, b.v);
+          if (axis.lengthSq() > 1e-8) { tmpQ.setFromAxisAngle(axis.normalize(), u * dt / BR); b.mesh.quaternion.premultiply(tmpQ); }
+        }
+      }
+
+      // rings, numeral, light
+      k = reduce ? 0 : 1;
+      ringAng[0] += dt * (.07 * k + speedRel * 5.2); ringAng[1] -= dt * (.05 * k + speedRel * 6.6);
+      gyro[0].rotation.y = ringAng[0]; gyro[1].rotation.y = ringAng[1];
+      if (numGoal > numS) numS = Math.min(1, numS + dt / .8); else if (numGoal < numS) numS = Math.max(0, numS - dt / .26);
+      numSpin = Math.max(0, numSpin - dt / 1.1);
+      g = numGoal ? (function (x) { var c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); })(numS) : numS * numS;
+      numG.scale.setScalar(Math.max(.0001, g));
+      numG.rotation.y = -Math.pow(numSpin, 2.2) * 5.4 + k * Math.sin(clock * .55) * .24;
+      numG.position.y = 1.72 + k * Math.sin(clock * .9) * .025;
+      inner.intensity += ((.7 + mix * 2.4 + pulse * 2) - inner.intensity) * Math.min(1, dt * 6);
+      glassMat.uniforms.gain.value = 1 + mix * .5 + pulse * .8;
+      pulse = Math.max(0, pulse - dt / 1.3); gemGlow = Math.max(0, gemGlow - dt / 1.6);
+      gemMat.emissiveIntensity = .5 + gemGlow * 2.6 + speedRel * .8;
+      if (bloom) bloom.strength = .5 + pulse * .7 + mix * .15;
+      if (flashT >= 0) {
+        flashT += dt; u = flashT / .7;
+        if (u >= 1) { flashT = -1; flash.material.opacity = 0; }
+        else { flash.scale.setScalar(.6 + u * 5.5); flash.material.opacity = Math.pow(1 - u, 2); }
+      }
+      if (burstOn) {
+        var alive = false, d = Math.exp(-1.9 * dt), f;
+        for (p = 0; p < PN; p++) {
+          bL[p * 2] += dt; u = 1 - bL[p * 2] / bL[p * 2 + 1];
+          if (u <= 0) { bC[p * 3] = bC[p * 3 + 1] = bC[p * 3 + 2] = 0; continue; }
+          alive = true;
+          bV[p * 3] *= d; bV[p * 3 + 1] = bV[p * 3 + 1] * d - .35 * dt; bV[p * 3 + 2] *= d;
+          bP[p * 3] += bV[p * 3] * dt; bP[p * 3 + 1] += bV[p * 3 + 1] * dt; bP[p * 3 + 2] += bV[p * 3 + 2] * dt;
+          f = Math.pow(u, 1.5) * (.65 + .35 * Math.sin(clock * 30 + p));
+          bC[p * 3] = f; bC[p * 3 + 1] = f * .8; bC[p * 3 + 2] = f * .42;
+        }
+        burstPts.geometry.attributes.position.needsUpdate = true; burstPts.geometry.attributes.color.needsUpdate = true;
+        burstOn = alive;
+      }
+      for (p = 0; p < DN; p++) {
+        dustP[p * 3 + 1] += dustS[p][0] * dt * k;
+        if (dustP[p * 3 + 1] > 4.5) dustP[p * 3 + 1] = -2;
+        f = .1 + .3 * (.5 + .5 * Math.sin(clock * dustS[p][2] + dustS[p][1]));
+        dustC[p * 3] = f; dustC[p * 3 + 1] = f * .8; dustC[p * 3 + 2] = f * .45;
+      }
+      dust.geometry.attributes.position.needsUpdate = true; dust.geometry.attributes.color.needsUpdate = true;
+
+      // camera: closes on the orb while it churns, climbs to the pole for the reveal, then settles
+      var now = performance.now(), yawG, pitchG, distG = D0, yG = .06, s = 1 - Math.exp(-dt * 2.4);
+      if (now - lastMove < 4000) { yawG = tx * .34; pitchG = .1 - ty * .1; }
+      else { yawG = k * Math.sin(clock / 5.2) * .22; pitchG = .1 + k * Math.cos(clock / 7.1) * .03; }
+      if (S.phase === 'spin') { distG = D0 * .82; yG = -.12; }
+      else if (S.phase !== 'idle') { distG = D0 * .6; yG = .92; }
+      if (!cam.dist) cam.dist = D0;
+      cam.yaw += (yawG - cam.yaw) * s; cam.pitch += (pitchG - cam.pitch) * s; cam.dist += (distG - cam.dist) * s; cam.y += (yG - cam.y) * s;
+      camera.position.set(cam.dist * Math.sin(cam.yaw) * Math.cos(cam.pitch), cam.y + cam.dist * Math.sin(cam.pitch), cam.dist * Math.cos(cam.yaw) * Math.cos(cam.pitch));
+      camera.lookAt(0, cam.y, 0);
+    }
+
+    function loop(now) {
+      requestAnimationFrame(loop);
+      var raw = (now - last) / 1000;
+      last = now;
+      if (!(raw > 0)) raw = .016;
+      step(Math.min(.25, raw));
+      if (finalPass) finalPass.uniforms.time.value = clock % 10;
+      if (composer) composer.render(); else renderer.render(scene, camera);
+      // if the device struggles, give up resolution first, then the bloom
+      if (!window.__noAdapt && tuned < 2 && ++frames > 30) {
+        slow += raw;
+        if (frames === 90) {
+          if (slow / 60 > .034) {
+            tuned++;
+            if (tuned === 1) { quality = 1; resize(); } else { composer = null; resize(); }
+          } else tuned = 2;
+          frames = 30; slow = 0;
+        }
+      }
+    }
+
+    // start: scatter the spheres and let them come to rest before the first frame
+    for (n = 1; n <= 10; n++) {
+      var a = n * 2.4, r = .25 + (n % 3) * .16;
+      balls[n].p.set(Math.cos(a) * r, -.35 + (n % 4) * .16, Math.sin(a) * r);
+      balls[n].mesh.quaternion.setFromEuler(new T.Euler(Math.random() * TAU, Math.random() * TAU, Math.random() * TAU));
+    }
+    for (i = 0; i < 480; i++) physics(1 / 120);
+    resize();
+    if (window.ResizeObserver) new ResizeObserver(resize).observe(host);
+    window.addEventListener('resize', resize);
+    api.start = function () { last = performance.now(); requestAnimationFrame(loop); host.classList.add('live'); };
+    return api;
   }
 
   /* ——— the draw ——— */
-  var angle = 0, shown = 0, spin = null, sweepT0 = 0;
-  var total = 0, counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], past = [], cols = {};
+  var G = null, drawing = null;
+  var total = 0, counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], past = [], cols = {}, n;
 
   // Uniform 1–10 from 32 bits of system entropy; the top six values are rejected so no number is favoured.
   function roll() {
@@ -624,25 +1029,6 @@ p, h1, h2, ol { margin: 0; padding: 0; }
     h = ('0000000' + b[0].toString(16).toUpperCase()).slice(-8);
     return { n: b[0] % 10 + 1, hex: h.slice(0, 4) + ' ' + h.slice(4) };
   }
-
-  function setAngle(a, vel) {
-    var n = ((Math.round(a / 36) % 10) + 10) % 10 || 10, i, gap, op;
-    carriage.setAttribute('transform', 'rotate(' + a.toFixed(2) + ' 300 300)');
-    gem.setAttribute('transform', 'rotate(' + (-a).toFixed(2) + ' 300 160)');
-    gap = clamp(vel * .012, 0, 7); op = clamp(vel / 500, 0, 1) * .5;
-    for (i = 0; i < ghosts.length; i++) {
-      ghosts[i].setAttribute('transform', 'rotate(' + (-(i + 1) * gap).toFixed(2) + ' 300 300)');
-      ghosts[i].setAttribute('opacity', (op * (1 - i / 9)).toFixed(3));
-    }
-    if (n !== shown) {
-      if (shown) { idx[shown].classList.remove('on'); stem[shown].classList.remove('on'); }
-      idx[n].classList.add('on'); stem[n].classList.add('on');
-      num.textContent = n; numSweep.textContent = n;
-      if (spin) tick(vel);
-      shown = n;
-    }
-  }
-
   function pad(v) { return ('000' + v).slice(-4); }
   function render() {
     var cur = past[0], max, i;
@@ -663,76 +1049,30 @@ p, h1, h2, ol { margin: 0; padding: 0; }
       cols[i].el.classList.toggle('cur', i === cur.n);
     }
     $('spreadCap').textContent = '十数分布 · 共 ' + total + ' 签';
+    if (!G) $('flat').textContent = cur.n;
   }
-
   function settle(r, quiet) {
     total++; counts[r.n]++;
     past.unshift({ no: total, n: r.n, hex: r.hex, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) });
     if (past.length > 6) past.pop();
-    face.classList.remove('spinning');
-    num.setAttribute('filter', 'url(#emboss)');
     btn.classList.remove('busy'); label.textContent = '抽取';
     render();
     if (!quiet) {
       bell(r.n);
-      if (!reduce) {
-        num.classList.remove('reveal'); piece.classList.remove('won'); seal.classList.remove('stamp');
-        void piece.offsetWidth;
-        num.classList.add('reveal'); piece.classList.add('won'); seal.classList.add('stamp');
-        sweepT0 = performance.now() + 180;
-        burst(r.n);
-      }
+      if (!reduce) { seal.classList.remove('stamp'); void seal.offsetWidth; seal.classList.add('stamp'); }
     }
     $('announce').textContent = '第 ' + total + ' 签：' + r.n + '，天干' + STEMS.charAt(r.n - 1);
   }
-
   function draw(instant) {
-    if (spin) { spin.skip = true; return; }
-    var r = roll(), from = angle, to = from + ((r.n * 36 - from) % 360 + 360) % 360 + (instant || reduce ? 0 : 1800);
-    if (instant || reduce) { angle = to % 360; setAngle(to, 0); settle(r, instant); return; }
-    spin = { from: from, to: to, t0: 0, dur: 3800, r: r, last: from, lt: 0, skip: false };
-    face.classList.add('spinning');
-    num.removeAttribute('filter'); num.classList.remove('reveal');
+    if (drawing) { G.skip(); return; }
+    var r = roll();
+    if (instant || reduce || !G) { if (G) G.set(r.n); settle(r, instant); return; }
+    drawing = r;
     btn.classList.add('busy'); label.textContent = '即刻揭晓';
     thump();
+    G.begin(r.n, function () { drawing = null; settle(r, false); });
   }
 
-  function spinStep(t) {
-    var s = spin, u, a, v;
-    if (!s.t0) { s.t0 = t; s.lt = t; }
-    u = (t - s.t0) / s.dur;
-    if (!s.skip && u < 1) {
-      a = s.from + (s.to - s.from) * (1 - Math.pow(1 - u, 2.6));
-      setAngle(a, (a - s.last) / Math.max(1, t - s.lt) * 1000);
-      s.last = a; s.lt = t;
-      return;
-    }
-    v = (t - s.t0 - s.dur) / 460;
-    if (!s.skip && v < 1) { setAngle(s.to + 1.5 * Math.exp(-4.5 * v) * Math.sin(v * Math.PI * 3), 0); return; }
-    angle = s.to % 360;
-    spin = null;
-    setAngle(s.to, 0);
-    settle(s.r, false);
-  }
-
-  function sweepStep(t) {
-    var u, e;
-    if (!sweepT0) return;
-    u = (t - sweepT0) / 950;
-    if (u < 0) return;
-    if (u >= 1) { sweepT0 = 0; sweepGrad.setAttribute('gradientTransform', 'translate(-400 0)'); return; }
-    e = u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
-    sweepGrad.setAttribute('gradientTransform', 'translate(' + (150 + e * 300).toFixed(1) + ' 0) skewX(-18)');
-  }
-
-  function frame(t) {
-    requestAnimationFrame(frame);
-    if (!reduce) { lightStep(t); fxStep(t); }
-    if (spin) spinStep(t);
-    sweepStep(t);
-  }
-
-  /* ——— wiring ——— */
   for (n = 1; n <= 10; n++) {
     var col = document.createElement('div');
     col.className = 'col';
@@ -740,28 +1080,31 @@ p, h1, h2, ol { margin: 0; padding: 0; }
     $('bars').appendChild(col);
     cols[n] = { el: col, c: col.querySelector('.c'), b: col.querySelector('.b') };
   }
-  btn.addEventListener('click', function () { draw(false); });
+  btn.addEventListener('click', function () { armed = true; draw(false); });
   document.addEventListener('keydown', function (ev) {
     if ((ev.code === 'Space' || ev.code === 'Enter') && ev.target.tagName !== 'BUTTON' && !ev.repeat) {
       ev.preventDefault();
+      armed = true;
       draw(false);
     }
   });
-  window.addEventListener('resize', function () { sizeFx(); paint(); });
-  if (window.ResizeObserver) new ResizeObserver(paint).observe(mount);
-  sizeFx();
-  paint();
 
   function start(data) {
-    if (data && data.past && data.past.length) {
-      past = data.past; counts = data.counts; total = data.total;
-      angle = past[0].n * 36 % 360;
-      setAngle(angle, 0);
-      render();
-    } else {
-      draw(true); // open on a real draw rather than an empty dial
+    if (data && data.past && data.past.length) { past = data.past; counts = data.counts; total = data.total; render(); }
+    else draw(true); // open on a real draw rather than an empty stage
+    // the record is on screen at once; the instrument follows as soon as its typefaces are in
+    var ready = false;
+    function build() {
+      if (ready) return;
+      ready = true;
+      try { G = initGL(); } catch (e) { G = null; if (window.console) console.error(e); }
+      if (G) { G.set(past[0].n); G.start(); }
+      else { $('gl').hidden = true; $('flat').hidden = false; $('flat').textContent = past[0].n; }
     }
-    requestAnimationFrame(frame);
+    if (document.fonts && document.fonts.load) {
+      Promise.all([document.fonts.load('700 32px "Bodoni Moda"', '0123456789'), document.fonts.load('900 26px "Noto Serif SC"', STEMS)]).then(build, build);
+      setTimeout(build, 1800);
+    } else build();
   }
   var hot = window.claude && window.claude.hot;
   if (hot && hot.snapshot) hot.snapshot(function () { return { past: past, counts: counts, total: total }; });
