@@ -3,231 +3,769 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<style>body{margin:0}</style>
 <title>一至十随机数</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;900&display=swap">
 <style>
-/* Layout: one watch dial in the middle of the screen; a marker orbits ten indices, the drawn number sits in the centre. */
+/* Layout: a catalogue plate. Vertical title at left, the instrument in the middle, the ledger at right; one column on a phone.
+   One committed look: black lacquer, painted gold, a jade cabochon, a cinnabar seal. */
 :root {
-  --bg: #0a1310;
-  --bg-glow: #12241d;
-  --dial-a: #10271f;
-  --dial-b: #143128;
-  --dial-edge: #07100d;
-  --metal: #d8c08c;
-  --metal-dim: #8f815f;
-  --ink: #ece7d8;
-  --muted: #84958b;
-  --line: #2a3f36;
-  --on-metal: #0d1a15;
-  --display: "Bodoni Moda", "Didot", "Bodoni 72", "Songti SC", "Noto Serif CJK SC", serif;
-  --text: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --lacquer: #0a0807;
+  --lacquer-warm: #2b1c0d;
+  --gold: #d9b55c;
+  --gold-hi: #fbe9ad;
+  --gold-lo: #8a6524;
+  --gold-dim: #6e5a34;
+  --ivory: #efe6d2;
+  --muted: #a39474;
+  --line: #3b2e1b;
+  --jade: #39d9a0;
+  --cinnabar: #b83222;
+  --ink-on-gold: #1a1206;
+  --serif-cn: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", "Noto Serif SC", "Songti SC", serif;
+  --mono: "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #e6e8e3; --bg-glow: #f4f5f1; --dial-a: #f5f5f0; --dial-b: #ecede7; --dial-edge: #cfd3cb;
-    --metal: #1f4a3b; --metal-dim: #6f8a7e; --ink: #14201b; --muted: #5d6c64; --line: #c3c9c1; --on-metal: #f3f4ef;
-    color-scheme: light;
-  }
-}
-:root[data-theme="light"] {
-  --bg: #e6e8e3; --bg-glow: #f4f5f1; --dial-a: #f5f5f0; --dial-b: #ecede7; --dial-edge: #cfd3cb;
-  --metal: #1f4a3b; --metal-dim: #6f8a7e; --ink: #14201b; --muted: #5d6c64; --line: #c3c9c1; --on-metal: #f3f4ef;
-  color-scheme: light;
 }
 
 html, body { height: 100%; }
 body {
-  background: radial-gradient(120% 80% at 50% 35%, var(--bg-glow), var(--bg) 70%) var(--bg);
-  color: var(--ink);
-  font-family: var(--text);
+  margin: 0;
+  color: var(--ivory);
+  font-family: var(--serif-cn);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(58% 52% at 50% 47%, rgba(140, 96, 34, .24), rgba(140, 96, 34, 0) 72%),
+    radial-gradient(130% 100% at 50% 50%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, .7) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .86  0 0 0 0 .62  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+    var(--lacquer);
+}
+p, h1, h2, ol { margin: 0; padding: 0; }
+
+#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+.plate {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 28px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
+  padding-block: 0 26px;
+  overflow: clip;
+}
+
+.top { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(0px, 2vw, 24px); }
+.mark { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; letter-spacing: .5em; color: var(--gold); }
+.mark i { width: 7px; height: 7px; background: var(--gold); transform: rotate(45deg); }
+.sound {
+  font: 400 12px var(--serif-cn); letter-spacing: .3em; color: var(--muted);
+  background: none; border: 0; border-bottom: 1px solid var(--line); padding: 6px 2px 6px calc(2px + .3em); cursor: pointer;
+}
+.sound[aria-pressed="true"] { color: var(--gold); border-bottom-color: var(--gold-dim); }
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: clamp(18px, 3.5vh, 34px);
+  column-gap: clamp(20px, 3vw, 56px);
+  padding-inline: clamp(0px, 2vw, 24px);
 }
 
-.masthead { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
-.masthead h1 {
-  margin: 0; font-family: var(--display); font-weight: 400;
-  font-size: clamp(22px, 3.4vh, 30px); letter-spacing: 0.42em; margin-right: -0.42em;
+/* ——— title ——— */
+.legend { justify-self: center; writing-mode: vertical-rl; }
+.title {
+  font: 900 clamp(72px, 13vh, 124px)/1.05 var(--serif-cn);
+  letter-spacing: .14em;
+  color: var(--gold);
+  background: linear-gradient(168deg, #fff3c4 0%, #e3c16b 28%, #a57a2a 50%, #efd487 58%, #b98d36 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .65));
 }
-.masthead p { margin: 0; font-size: 12px; letter-spacing: 0.3em; margin-right: -0.3em; color: var(--muted); }
+.motto { margin-right: 28px; padding-top: 1.6em; font-size: 14px; line-height: 1; letter-spacing: .55em; color: var(--muted); }
 
-.dial {
-  width: min(100%, 52vh, 440px);
-  aspect-ratio: 1;
-  max-width: 100%;
-  border-radius: 50%;
+/* ——— instrument ——— */
+.center { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.mount { position: relative; width: min(60vh, 40vw, 560px); aspect-ratio: 1; max-width: 100%; }
+.mount::before {
+  content: ""; position: absolute; inset: -40%; border-radius: 50%; pointer-events: none;
+  background: repeating-radial-gradient(circle closest-side, rgba(217, 181, 92, 0) 0 5.5%, rgba(217, 181, 92, .1) 5.5% 5.72%);
+  -webkit-mask: radial-gradient(circle closest-side, #000 52%, transparent 100%);
+  mask: radial-gradient(circle closest-side, #000 52%, transparent 100%);
+}
+.piece {
+  position: absolute; inset: 0; border-radius: 50%;
+  transform: perspective(1400px) rotateX(calc(var(--tx, 0) * 1deg)) rotateY(calc(var(--ty, 0) * 1deg));
+  box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 120px -12px rgba(214, 170, 80, .3);
+}
+.piece.won { animation: aura 1.5s ease-out; }
+@keyframes aura {
+  0% { box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 120px -12px rgba(214, 170, 80, .3); }
+  18% { box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 170px 18px rgba(255, 214, 120, .6); }
+  100% { box-shadow: 0 54px 90px -34px #000, 0 0 0 1px rgba(0, 0, 0, .85), 0 0 120px -12px rgba(214, 170, 80, .3); }
+}
+.piece > * { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+.sunray, .sheen, .glass { pointer-events: none; }
+.sunray {
+  background: conic-gradient(from calc(var(--la, -58) * 1deg - 20deg),
+    rgba(255, 236, 190, 0) 0deg, rgba(255, 236, 190, .11) 30deg, rgba(255, 236, 190, 0) 62deg,
+    rgba(255, 236, 190, 0) 180deg, rgba(255, 236, 190, .06) 210deg, rgba(255, 236, 190, 0) 242deg, rgba(255, 236, 190, 0) 360deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 50.6%, #000 51.2%, #000 76%, transparent 76.6%);
+  mask: radial-gradient(circle closest-side, transparent 50.6%, #000 51.2%, #000 76%, transparent 76.6%);
+}
+.sheen {
+  background: conic-gradient(from calc(var(--la, -58) * 1deg),
+    rgba(255, 250, 228, 0) 0deg, rgba(255, 250, 228, .85) 16deg, rgba(255, 250, 228, 0) 38deg,
+    rgba(255, 250, 228, 0) 168deg, rgba(255, 250, 228, .4) 192deg, rgba(255, 250, 228, 0) 218deg, rgba(255, 250, 228, 0) 360deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 87.6%, #000 88.4%, #000 98.4%, transparent 99%);
+  mask: radial-gradient(circle closest-side, transparent 87.6%, #000 88.4%, #000 98.4%, transparent 99%);
+}
+.piece > .glass {
+  inset: 6.4%; width: auto; height: auto;
   background:
-    radial-gradient(circle, transparent 58%, var(--dial-edge) 100%),
-    repeating-conic-gradient(var(--dial-a) 0deg 1.8deg, var(--dial-b) 1.8deg 3.6deg);
-  box-shadow: 0 0 0 1px var(--metal-dim), 0 0 0 7px var(--bg), 0 0 0 8px var(--line), 0 30px 60px -30px #000;
+    radial-gradient(ellipse 58% 34% at var(--gx, 34%) var(--gy, 20%), rgba(255, 255, 255, .15), rgba(255, 255, 255, 0) 72%),
+    linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, 0) 42%);
 }
-.dial svg { display: block; width: 100%; height: 100%; }
-.tick { stroke: var(--metal-dim); stroke-width: 1; }
-.tick.major { stroke: var(--metal); stroke-width: 2; }
-.track { fill: none; stroke: var(--line); stroke-width: 1; }
-.index {
-  font-family: var(--display); font-size: 21px; fill: var(--muted);
-  text-anchor: middle; dominant-baseline: central; transition: fill .25s;
-}
-.index.on { fill: var(--metal); }
-.marker { fill: var(--metal); }
-.result {
-  font-family: var(--display); font-weight: 400; font-size: 132px; fill: var(--ink);
-  text-anchor: middle; dominant-baseline: central; font-variant-numeric: lining-nums;
-}
-.dial.spinning .result { opacity: .55; }
 
+.idx, .stem, .num { text-anchor: middle; dominant-baseline: central; }
+.idx { font-family: var(--display); font-size: 30px; font-weight: 500; fill: #8f7a4c; transition: fill 1.2s ease-out, filter 1.2s ease-out; }
+.idx.on { fill: #fff3c0; filter: drop-shadow(0 0 6px rgba(255, 214, 120, .95)); transition: none; }
+.stem { font-family: var(--serif-cn); font-size: 14px; font-weight: 600; fill: #6b5a36; transition: fill 1.2s ease-out; }
+.stem.on { fill: #f3d98f; transition: none; }
+.num { font-family: var(--display); font-weight: 500; font-size: 172px; transform-box: fill-box; transform-origin: center; }
+.spinning .num { opacity: .3; }
+.spinning .num.sweep { opacity: 0; }
+.num.reveal { animation: pop .75s cubic-bezier(.2, 1.5, .3, 1) both; }
+@keyframes pop { from { transform: scale(.8); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+
+/* ——— control ——— */
 .draw {
-  font: inherit; font-size: 15px; letter-spacing: 0.5em; padding: 14px 44px 14px calc(44px + 0.5em);
-  color: var(--on-metal); background: var(--metal); border: 0; border-radius: 999px; cursor: pointer;
-  transition: transform .15s, opacity .2s;
+  position: relative; overflow: hidden; cursor: pointer; border: 0; border-radius: 999px;
+  font: 600 17px var(--serif-cn); letter-spacing: .7em; color: var(--ink-on-gold);
+  padding: 15px 56px 15px calc(56px + .7em);
+  background: linear-gradient(180deg, #fdeeb5 0%, #e2bf68 38%, #b98d34 52%, #d8b25a 70%, #f6de96 100%);
+  box-shadow: 0 0 0 1px #5a4012, 0 0 0 4px var(--lacquer), 0 0 0 5px var(--gold-dim), 0 16px 30px -12px #000,
+    inset 0 1px 0 rgba(255, 255, 255, .75), inset 0 -2px 3px rgba(80, 50, 5, .5);
+  transition: transform .15s, filter .2s;
 }
-.draw:hover { transform: translateY(-1px); }
-.draw:active { transform: translateY(1px); }
-.draw:disabled { opacity: .45; cursor: default; transform: none; }
-.draw:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.draw::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0) 36%, rgba(255, 255, 255, .7) 50%, rgba(255, 255, 255, 0) 64%);
+  transform: translateX(-120%); transition: transform .8s;
+}
+.draw:hover::after { transform: translateX(120%); }
+.draw:hover { filter: brightness(1.06); }
+.draw:active { transform: translateY(2px); }
+.draw.busy { background: none; color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim), 0 0 0 4px var(--lacquer), 0 0 0 5px var(--line); }
+.draw.busy::after { display: none; }
+.draw:focus-visible, .sound:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 7px; }
+.hint { font-size: 12px; letter-spacing: .3em; color: var(--muted); }
 
-.log { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 58px; }
-.log-label { font-size: 11px; letter-spacing: 0.3em; margin-right: -0.3em; color: var(--muted); }
-.log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
-.log li {
-  font-family: var(--display); font-size: 18px; color: var(--muted);
-  font-variant-numeric: tabular-nums lining-nums; min-width: 1.3em; text-align: center;
+/* ——— record ——— */
+.record { justify-self: start; width: 100%; max-width: 320px; min-width: 0; display: flex; flex-direction: column; gap: 26px; }
+.now { display: flex; align-items: center; gap: 18px; }
+.seal { flex: none; width: 76px; height: 76px; transform: rotate(-4deg); }
+.seal.stamp { animation: stamp .36s cubic-bezier(.2, .9, .3, 1.3) both; }
+@keyframes stamp { from { transform: rotate(-10deg) scale(1.8); opacity: 0; } to { transform: rotate(-4deg) scale(1); opacity: 1; } }
+.seal text { font-family: var(--serif-cn); font-weight: 900; font-size: 38px; text-anchor: middle; dominant-baseline: central; }
+.now-text { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.serial, .entropy { font: 400 12px var(--mono); letter-spacing: .08em; color: var(--muted); }
+.reading { display: flex; align-items: baseline; gap: 8px; font-size: 26px; font-weight: 600; line-height: 1.1; color: var(--gold-hi); }
+.reading .k { font-size: 11px; font-weight: 400; letter-spacing: .2em; color: var(--muted); }
+.reading .k + span { margin-right: 8px; }
+
+.cap { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 12px; font-weight: 400; letter-spacing: .4em; color: var(--gold); }
+.cap::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), rgba(59, 46, 27, 0)); }
+.rows { list-style: none; min-height: 168px; }
+.rows li, .rows-head {
+  display: grid; grid-template-columns: 4ch 1.5em 1.3em 1.3em minmax(0, 1fr) auto;
+  column-gap: 12px; align-items: baseline; padding: 4px 0;
 }
-.log li:first-child { color: var(--metal); border-bottom: 1px solid var(--metal); }
+.rows-head { font-size: 11px; color: var(--gold-dim); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.rows li { color: var(--muted); }
+.rows li:first-child { color: var(--gold-hi); }
+.rows li:nth-child(n+4) { opacity: .7; }
+.rows li:nth-child(n+6) { opacity: .45; }
+.rows .no, .rows .hx, .rows .tm { font: 400 12px var(--mono); font-variant-numeric: tabular-nums; }
+.rows .v { font: 500 17px var(--display); font-variant-numeric: lining-nums; }
+.rows .tm, .rows-head span:last-child { text-align: right; }
+
+.bars { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); column-gap: 6px; }
+.col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.col .c { height: 12px; font: 400 10px/12px var(--mono); color: var(--muted); }
+.col .t { width: 100%; height: 44px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--line); }
+.col .b { width: 56%; height: 0; background: linear-gradient(180deg, var(--gold-hi), var(--gold-lo)); transition: height .5s cubic-bezier(.2, .8, .2, 1); }
+.col .n { font: 500 13px var(--display); font-variant-numeric: lining-nums; color: var(--muted); }
+.col.cur .n, .col.cur .c { color: var(--gold-hi); }
+.note { font-size: 12px; line-height: 1.9; color: var(--muted); }
+
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+@media (max-width: 1099px) {
+  .stage { grid-template-columns: minmax(0, 1fr); justify-items: center; row-gap: 26px; padding-block: 4px 16px; }
+  .legend { writing-mode: horizontal-tb; text-align: center; }
+  .title { font-size: clamp(34px, 9vw, 52px); letter-spacing: .5em; margin-right: -.5em; }
+  .motto { margin: 12px 0 0; padding: 0; font-size: 12px; letter-spacing: .3em; }
+  .center { width: 100%; }
+  .mount { width: min(100%, 64vh, 520px); }
+  .record { justify-self: center; max-width: 440px; }
+  .rows { min-height: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .piece { transform: none; }
+  .piece.won, .num.reveal, .seal.stamp { animation: none; }
+  .idx, .stem, .col .b, .draw, .draw::after { transition: none; }
+}
 </style>
 </head>
 <body>
 
-<header class="masthead">
-  <h1>一至十</h1>
-  <p>十个数字 · 机会均等</p>
-</header>
+<canvas id="fx" aria-hidden="true"></canvas>
 
-<div class="dial" id="dial">
-  <svg viewBox="0 0 400 400" role="img" aria-label="一到十的随机数表盘">
-    <g id="ticks"></g>
-    <circle class="track" cx="200" cy="200" r="124"></circle>
-    <g id="indices"></g>
-    <g id="marker"><polygon class="marker" points="200,92 192.5,110 207.5,110"></polygon></g>
-    <text class="result" id="result" x="200" y="204">–</text>
-  </svg>
+<div class="plate">
+  <header class="top">
+    <span class="mark"><i></i>十数仪</span>
+    <span class="sr" id="announce" aria-live="polite"></span>
+    <button class="sound" id="sound" type="button" aria-pressed="true">钟声 · 开</button>
+  </header>
+
+  <main class="stage">
+    <div class="legend">
+      <h1 class="title">一至十</h1>
+      <p class="motto">天干为序　五音为应　十数之中　择一而出</p>
+    </div>
+
+    <div class="center">
+      <div class="mount" id="mount">
+        <div class="piece" id="piece">
+          <canvas id="dialBody"></canvas>
+          <div class="sunray"></div>
+          <svg id="face" viewBox="0 0 600 600" role="img" aria-label="一到十的随机数仪表">
+            <defs>
+              <linearGradient id="gFoil" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#fff3c4"/><stop offset=".3" stop-color="#e6c570"/>
+                <stop offset=".5" stop-color="#a87d2b"/><stop offset=".56" stop-color="#f0d488"/>
+                <stop offset=".8" stop-color="#c69a40"/><stop offset="1" stop-color="#8c6722"/>
+              </linearGradient>
+              <linearGradient id="gSweep" gradientUnits="userSpaceOnUse" x1="-55" y1="0" x2="55" y2="0" gradientTransform="translate(-400 0)">
+                <stop offset="0" stop-color="#fffbe6" stop-opacity="0"/><stop offset=".5" stop-color="#fffbe6" stop-opacity=".95"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/>
+              </linearGradient>
+              <radialGradient id="gJade" cx=".35" cy=".3" r=".8">
+                <stop offset="0" stop-color="#d9ffe9"/><stop offset=".25" stop-color="#4fd1a0"/>
+                <stop offset=".65" stop-color="#0f7a57"/><stop offset="1" stop-color="#04261b"/>
+              </radialGradient>
+              <linearGradient id="gRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#fff3c4"/><stop offset=".5" stop-color="#b88a32"/><stop offset="1" stop-color="#f1d98e"/>
+              </linearGradient>
+              <filter id="emboss" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="2.4" result="blur"/>
+                <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.05" specularExponent="26" lighting-color="#fff3c4" result="spec">
+                  <fePointLight id="pl" x="190" y="150" z="210"/>
+                </feSpecularLighting>
+                <feComposite in="spec" in2="SourceAlpha" operator="in" result="specIn"/>
+                <feComposite in="SourceGraphic" in2="specIn" operator="arithmetic" k1="0" k2="1" k3=".9" k4="0" result="lit"/>
+                <feOffset in="blur" dx="0" dy="5" result="off"/>
+                <feFlood flood-color="#000" flood-opacity=".75"/>
+                <feComposite in2="off" operator="in" result="shadow"/>
+                <feMerge><feMergeNode in="shadow"/><feMergeNode in="lit"/></feMerge>
+              </filter>
+              <filter id="halo" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="8"/></filter>
+            </defs>
+            <g id="ring"></g>
+            <g id="carriage">
+              <g id="trail"></g>
+              <circle cx="300" cy="160" r="20" fill="#39d9a0" opacity=".4" filter="url(#halo)"/>
+              <path d="M300 141.5l-4.5 8h9z" fill="#f1d98e"/>
+              <g id="gem">
+                <circle cx="300" cy="160" r="13" fill="url(#gRing)"/>
+                <circle cx="300" cy="160" r="11.4" fill="none" stroke="#3b2a0a" stroke-width=".9"/>
+                <circle cx="300" cy="160" r="9.6" fill="url(#gJade)"/>
+                <ellipse cx="296.6" cy="156.2" rx="3.3" ry="2" fill="#fff" opacity=".8" transform="rotate(-30 296.6 156.2)"/>
+              </g>
+            </g>
+            <text id="num" class="num" x="300" y="305" fill="url(#gFoil)" filter="url(#emboss)">–</text>
+            <text id="numSweep" class="num sweep" x="300" y="305" fill="url(#gSweep)">–</text>
+          </svg>
+          <div class="sheen"></div>
+          <div class="glass"></div>
+        </div>
+      </div>
+      <button class="draw" id="draw" type="button"><span id="drawLabel">抽取</span></button>
+      <p class="hint">按空格键亦可抽取</p>
+    </div>
+
+    <aside class="record">
+      <section class="now" aria-label="本签">
+        <svg class="seal" id="seal" viewBox="0 0 72 72" aria-hidden="true">
+          <defs>
+            <filter id="ink" x="-6%" y="-6%" width="112%" height="112%">
+              <feTurbulence type="fractalNoise" baseFrequency=".5" numOctaves="2" seed="4" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G" result="d"/>
+              <feTurbulence type="fractalNoise" baseFrequency="1.3" numOctaves="1" seed="9" result="s"/>
+              <feColorMatrix in="s" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -9 6.2" result="holes"/>
+              <feComposite in="d" in2="holes" operator="in"/>
+            </filter>
+          </defs>
+          <g filter="url(#ink)">
+            <rect x="5" y="5" width="62" height="62" rx="6" fill="#b83222"/>
+            <rect x="10.5" y="10.5" width="51" height="51" rx="2.5" fill="none" stroke="#0a0807" stroke-width="1.4"/>
+            <text id="sealChar" x="36" y="37" fill="#0a0807">壹</text>
+          </g>
+        </svg>
+        <div class="now-text">
+          <p class="serial" id="serial">第 0000 签</p>
+          <p class="reading"><span class="k">天干</span><span id="rStem">甲</span><span class="k">五音</span><span id="rTone">宫</span></p>
+          <p class="entropy" id="entropy">熵 0000 0000</p>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="cap">签录</h2>
+        <div class="rows-head"><span>序</span><span>数</span><span>写</span><span>干</span><span>熵</span><span>时刻</span></div>
+        <ol class="rows" id="rows"></ol>
+      </section>
+
+      <section>
+        <h2 class="cap" id="spreadCap">十数分布</h2>
+        <div class="bars" id="bars"></div>
+      </section>
+
+      <p class="note">取自系统加密熵源，弃偏取样。每签十数各占十分之一，前签不影响后签。</p>
+    </aside>
+  </main>
 </div>
-<span class="sr" id="announce" aria-live="polite"></span>
-
-<button class="draw" id="draw" type="button">抽取</button>
-
-<section class="log" aria-label="最近结果">
-  <span class="log-label" id="count">最近结果</span>
-  <ol id="history"></ol>
-</section>
-
 <script>
 (function () {
-  var NS = 'http://www.w3.org/2000/svg';
-  var ticks = document.getElementById('ticks');
-  var indices = document.getElementById('indices');
-  var marker = document.getElementById('marker');
-  var result = document.getElementById('result');
-  var dial = document.getElementById('dial');
-  var btn = document.getElementById('draw');
-  var historyEl = document.getElementById('history');
-  var countEl = document.getElementById('count');
-  var announce = document.getElementById('announce');
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = 'http://www.w3.org/2000/svg', TAU = Math.PI * 2;
+  var STEMS = '甲乙丙丁戊己庚辛壬癸', CAPS = '壹贰叁肆伍陆柒捌玖拾';
+  var TONES = ['宫', '商', '角', '徵', '羽'], RATIO = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3];
+  var mount = $('mount'), piece = $('piece'), cv = $('dialBody'), face = $('face');
+  var carriage = $('carriage'), gem = $('gem'), num = $('num'), numSweep = $('numSweep');
+  var sweepGrad = $('gSweep'), light = $('pl'), btn = $('draw'), label = $('drawLabel'), seal = $('seal');
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  function polar(r, deg) {
-    var a = deg * Math.PI / 180;
-    return [200 + r * Math.sin(a), 200 - r * Math.cos(a)];
-  }
-  // 50 graduations; every fifth one is a number's index. 10 sits at twelve o'clock.
-  for (var i = 0; i < 50; i++) {
-    var major = i % 5 === 0, p1 = polar(major ? 172 : 178, i * 7.2), p2 = polar(186, i * 7.2);
-    var l = document.createElementNS(NS, 'line');
-    l.setAttribute('x1', p1[0]); l.setAttribute('y1', p1[1]);
-    l.setAttribute('x2', p2[0]); l.setAttribute('y2', p2[1]);
-    l.setAttribute('class', major ? 'tick major' : 'tick');
-    ticks.appendChild(l);
-  }
-  var indexEls = {};
-  for (var n = 1; n <= 10; n++) {
-    var p = polar(150, n * 36), t = document.createElementNS(NS, 'text');
-    t.setAttribute('x', p[0]); t.setAttribute('y', p[1]);
-    t.setAttribute('class', 'index');
-    t.textContent = n;
-    indices.appendChild(t);
-    indexEls[n] = t;
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function pol(r, deg) { var a = deg * Math.PI / 180; return [300 + r * Math.sin(a), 300 - r * Math.cos(a)]; }
+  function el(name, attrs, text) {
+    var e = document.createElementNS(NS, name), k;
+    for (k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
   }
 
-  // Uniform 1–10: reject bytes >= 250 so no number is favoured.
+  /* ——— the face: ten numerals, ten heavenly stems, the jewel's trail ——— */
+  var idx = {}, stem = {}, ghosts = [], n, p, k;
+  for (n = 1; n <= 10; n++) {
+    p = pol(198, n * 36);
+    idx[n] = $('ring').appendChild(el('text', { x: p[0].toFixed(1), y: p[1].toFixed(1), 'class': 'idx' }, n));
+    p = pol(175, n * 36);
+    stem[n] = $('ring').appendChild(el('text', { x: p[0].toFixed(1), y: p[1].toFixed(1), 'class': 'stem' }, STEMS.charAt(n - 1)));
+  }
+  for (k = 1; k <= 9; k++) {
+    ghosts.push($('trail').appendChild(el('circle', { cx: 300, cy: 160, r: (10 - k * 0.8).toFixed(1), fill: '#5be6b3', opacity: 0 })));
+  }
+
+  /* ——— the body: bezel, fret band, graduations, groove and guilloché, painted once per size ——— */
+  var GOLD = [[0, '#f7e3a0'], [.06, '#fff6d2'], [.12, '#c9a046'], [.22, '#6f4f17'], [.3, '#b88f39'], [.38, '#f3dc96'],
+    [.46, '#9a7426'], [.5, '#5e4313'], [.56, '#c9a046'], [.62, '#fff1bf'], [.7, '#b58a33'], [.8, '#6a4b15'],
+    [.88, '#c39a41'], [.95, '#f0d88c'], [1, '#f7e3a0']];
+  function paint() {
+    var css = mount.clientWidth;
+    if (!css) return;
+    var px = Math.round(css * Math.min(window.devicePixelRatio || 1, 3));
+    if (cv.width === px) return;
+    cv.width = cv.height = px;
+    var c = cv.getContext('2d'), C = 300, i, j, a, g, q;
+    c.setTransform(px / 600, 0, 0, px / 600, 0, 0);
+    function at(r, a) { return [C + r * Math.sin(a), C - r * Math.cos(a)]; }
+    function stops(g, list) { list.forEach(function (s) { g.addColorStop(s[0], s[1]); }); return g; }
+    function conic(start) {
+      return stops(c.createConicGradient ? c.createConicGradient(start, C, C) : c.createLinearGradient(0, 0, 600, 600), GOLD);
+    }
+    function lin(list) { return stops(c.createLinearGradient(0, 0, 0, 600), list); }
+    function ring(r1, r2, fill) { c.beginPath(); c.arc(C, C, r2, 0, TAU); c.arc(C, C, r1, 0, TAU, true); c.fillStyle = fill; c.fill(); }
+    function circle(r, stroke, w) { c.beginPath(); c.arc(C, C, r, 0, TAU); c.strokeStyle = stroke; c.lineWidth = w; c.stroke(); }
+    function spoke(r1, r2, a, stroke, w) {
+      var p1 = at(r1, a), p2 = at(r2, a);
+      c.beginPath(); c.moveTo(p1[0], p1[1]); c.lineTo(p2[0], p2[1]); c.strokeStyle = stroke; c.lineWidth = w; c.stroke();
+    }
+
+    g = stops(c.createRadialGradient(C - 80, C - 110, 10, C, C, 300), [[0, '#231a12'], [.45, '#100c09'], [1, '#050403']]);
+    c.beginPath(); c.arc(C, C, 297, 0, TAU); c.fillStyle = g; c.fill();
+
+    // fluted gold bezel with two polished rims
+    ring(264, 297, conic(-2.2));
+    for (i = 0; i < 160; i++) {
+      a = i / 160 * TAU;
+      spoke(269, 292, a, 'rgba(40,24,4,.5)', 1.5);
+      spoke(269, 292, a + TAU / 320, 'rgba(255,247,214,.3)', 1);
+    }
+    ring(292.5, 297, lin([[0, '#fff4cc'], [.5, '#b98d36'], [1, '#5f4413']]));
+    ring(262, 268.5, lin([[0, '#6a4c17'], [.5, '#c79f47'], [1, '#fff0bd']]));
+    circle(261.2, 'rgba(0,0,0,.85)', 2.4);
+    circle(297, 'rgba(0,0,0,.6)', 1);
+
+    // 回纹 fret band: 72 squared spirals, mirrored in pairs
+    var N = 72, d = TAU / N, P = [[0, 0], [0, 1], [1, 1], [1, .3], [.38, .3], [.38, .68], [.7, .68]], u;
+    ring(234, 258, 'rgba(0,0,0,.4)');
+    c.beginPath();
+    for (i = 0; i < N; i++) {
+      for (j = 0; j < P.length; j++) {
+        u = i % 2 ? 1 - P[j][0] : P[j][0];
+        q = at(239.5 + P[j][1] * 13, i * d + (u * .74 + .13) * d);
+        if (j) c.lineTo(q[0], q[1]); else c.moveTo(q[0], q[1]);
+      }
+    }
+    c.strokeStyle = conic(-.9); c.lineWidth = 1.15; c.globalAlpha = .85; c.stroke(); c.globalAlpha = 1;
+    circle(235.5, 'rgba(217,181,92,.75)', 1);
+    circle(256.5, 'rgba(217,181,92,.75)', 1);
+
+    // graduations: one hundred, the tenth of each marks a number
+    circle(231, 'rgba(217,181,92,.9)', 1.2);
+    for (i = 0; i < 100; i++) {
+      a = i / 100 * TAU;
+      if (i % 10 === 0) spoke(216, 229, a, '#f5dc94', 2.4);
+      else if (i % 5 === 0) spoke(221, 229, a, '#c9a552', 1.3);
+      else spoke(224, 229, a, 'rgba(160,130,70,.75)', .9);
+    }
+
+    // the groove the jewel rides in, with a gold stud at each detent
+    ring(129, 151, stops(c.createRadialGradient(C, C, 129, C, C, 151), [[0, '#000'], [.5, '#0c0906'], [1, '#000']]));
+    circle(129, 'rgba(190,155,80,.7)', 1);
+    circle(151, 'rgba(190,155,80,.7)', 1);
+    c.fillStyle = '#d9b55c';
+    for (i = 1; i <= 10; i++) { q = at(140, i * TAU / 10); c.beginPath(); c.arc(q[0], q[1], 1.7, 0, TAU); c.fill(); }
+
+    // engine-turned rosette under the numeral
+    c.save();
+    c.beginPath(); c.arc(C, C, 121, 0, TAU); c.clip();
+    c.fillStyle = stops(c.createRadialGradient(C, C, 0, C, C, 121), [[0, '#17110b'], [1, '#080605']]);
+    c.fillRect(170, 170, 260, 260);
+    c.lineWidth = .7;
+    for (i = 0; i < 90; i++) {
+      a = i / 90 * TAU;
+      c.strokeStyle = i % 2 ? 'rgba(226,190,104,.24)' : 'rgba(255,240,190,.13)';
+      c.beginPath(); c.arc(C + 60.5 * Math.cos(a), C + 60.5 * Math.sin(a), 60.5, 0, TAU); c.stroke();
+    }
+    c.fillStyle = stops(c.createRadialGradient(C, C, 0, C, C, 121), [[0, 'rgba(8,6,4,.92)'], [.5, 'rgba(8,6,4,.62)'], [.92, 'rgba(8,6,4,0)']]);
+    c.fillRect(170, 170, 260, 260);
+    c.restore();
+    ring(120, 125.5, conic(.8));
+    circle(126, 'rgba(0,0,0,.8)', 1.2);
+    circle(119.6, 'rgba(0,0,0,.7)', 1);
+  }
+
+  /* ——— sound: a woodblock for each detent, a bronze chime in the number's own pentatonic note ——— */
+  var ac = null, master = null, wet = null, soundOn = true, lastTick = 0;
+  try { if (localStorage.getItem('one-to-ten-sound') === 'off') soundOn = false; } catch (e) {}
+  function audio() {
+    if (!soundOn) return null;
+    if (!ac) {
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        ac = new AC();
+        master = ac.createGain(); master.gain.value = .5; master.connect(ac.destination);
+        var len = Math.floor(ac.sampleRate * 2.6), buf = ac.createBuffer(2, len, ac.sampleRate), ch, i, d;
+        for (ch = 0; ch < 2; ch++) {
+          d = buf.getChannelData(ch);
+          for (i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
+        }
+        var conv = ac.createConvolver(); conv.buffer = buf;
+        wet = ac.createGain(); wet.gain.value = .3; wet.connect(conv); conv.connect(master);
+      } catch (e) { ac = null; return null; }
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function voice(a, freq, t, peak, decay, toWet, type) {
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + .006);
+    g.gain.exponentialRampToValueAtTime(.0001, t + decay);
+    o.connect(g); g.connect(master); if (toWet) g.connect(wet);
+    o.start(t); o.stop(t + decay + .05);
+    return o;
+  }
+  function tick(vel) {
+    var now = performance.now();
+    if (now - lastTick < 26) return;
+    lastTick = now;
+    var a = audio(); if (!a) return;
+    var v = .45 + .55 * clamp(1 - vel / 1400, 0, 1);
+    voice(a, 1180, a.currentTime, .13 * v, .05, false).frequency.exponentialRampToValueAtTime(940, a.currentTime + .04);
+    voice(a, 2360, a.currentTime, .04 * v, .025, false, 'triangle');
+  }
+  function thump() {
+    var a = audio(); if (!a) return;
+    voice(a, 150, a.currentTime, .5, .34, true).frequency.exponentialRampToValueAtTime(52, a.currentTime + .3);
+  }
+  function bell(n) {
+    var a = audio(); if (!a) return;
+    var t = a.currentTime + .02, f = 261.63 * RATIO[(n - 1) % 5] * (n > 5 ? 2 : 1);
+    [[.5, .3, 3.6], [1, 1, 3.2], [2, .42, 2.2], [2.4, .2, 1.5], [3, .16, 1.1], [4.16, .09, .8], [5.43, .05, .5]].forEach(function (h) {
+      voice(a, f * h[0], t, .2 * h[1], h[2], true);
+    });
+  }
+  function paintSound() {
+    $('sound').setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    $('sound').textContent = soundOn ? '钟声 · 开' : '钟声 · 关';
+  }
+  $('sound').addEventListener('click', function () {
+    soundOn = !soundOn;
+    try { localStorage.setItem('one-to-ten-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    paintSound();
+    if (soundOn) bell(1);
+  });
+  paintSound();
+
+  /* ——— gold dust ——— */
+  var fx = $('fx'), fc = fx.getContext('2d'), W = 0, H = 0, motes = [], sparks = [], shock = null, lastT = 0;
+  function sizeFx() {
+    var d = Math.min(window.devicePixelRatio || 1, 2), i;
+    W = window.innerWidth; H = window.innerHeight;
+    fx.width = Math.round(W * d); fx.height = Math.round(H * d);
+    fc.setTransform(d, 0, 0, d, 0, 0);
+    motes = [];
+    for (i = 0; i < 30; i++) {
+      motes.push({ x: Math.random() * W, y: Math.random() * H, r: .5 + Math.random() * 1.1, v: 4 + Math.random() * 9, p: Math.random() * TAU, s: .4 + Math.random() * .9 });
+    }
+  }
+  function burst(n) {
+    var r = mount.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2, k = R / 250, i, a, sp;
+    for (i = 0; i < 150; i++) {
+      a = Math.random() * TAU; sp = (50 + Math.random() * Math.random() * 420) * k;
+      sparks.push({ x: cx + Math.cos(a) * R * .41, y: cy + Math.sin(a) * R * .41, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20 * k,
+        life: 0, max: .9 + Math.random() * 1.6, r: .6 + Math.random() * 1.6, p: Math.random() * TAU,
+        c: '255,' + (205 + Math.random() * 40 | 0) + ',' + (120 + Math.random() * 70 | 0) });
+    }
+    var A = n * 36 * Math.PI / 180, jx = cx + Math.sin(A) * R * .4667, jy = cy - Math.cos(A) * R * .4667;
+    for (i = 0; i < 46; i++) {
+      a = Math.random() * TAU; sp = (30 + Math.random() * 170) * k;
+      sparks.push({ x: jx, y: jy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: .6 + Math.random() * 1.1,
+        r: .6 + Math.random() * 1.3, p: Math.random() * TAU, c: '150,255,210' });
+    }
+    shock = { x: cx, y: cy, r0: R * .42, r1: R * 1.5, t: 0 };
+  }
+  function fxStep(t) {
+    var dt = Math.min(.05, (t - lastT) / 1000 || 0), i, m, s, u, drag;
+    lastT = t;
+    fc.clearRect(0, 0, W, H);
+    fc.globalCompositeOperation = 'lighter';
+    for (i = 0; i < motes.length; i++) {
+      m = motes[i];
+      m.y -= m.v * dt; m.x += Math.sin(t / 1900 + m.p) * 6 * dt;
+      if (m.y < -4) { m.y = H + 4; m.x = Math.random() * W; }
+      fc.fillStyle = 'rgba(240,205,120,' + (.1 + .16 * (.5 + .5 * Math.sin(t / 900 * m.s + m.p))).toFixed(3) + ')';
+      fc.beginPath(); fc.arc(m.x, m.y, m.r, 0, TAU); fc.fill();
+    }
+    drag = Math.exp(-2.2 * dt);
+    for (i = sparks.length - 1; i >= 0; i--) {
+      s = sparks[i];
+      s.life += dt;
+      if (s.life >= s.max) { sparks.splice(i, 1); continue; }
+      s.vx *= drag; s.vy = s.vy * drag + 26 * dt;
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      u = 1 - s.life / s.max;
+      fc.fillStyle = 'rgba(' + s.c + ',' + (Math.pow(u, 1.5) * (.6 + .4 * Math.sin(t / 60 + s.p))).toFixed(3) + ')';
+      fc.beginPath(); fc.arc(s.x, s.y, s.r, 0, TAU); fc.fill();
+    }
+    if (shock) {
+      shock.t += dt; u = shock.t / 1.1;
+      if (u >= 1) shock = null;
+      else {
+        fc.strokeStyle = 'rgba(255,224,150,' + (Math.pow(1 - u, 2) * .5).toFixed(3) + ')';
+        fc.lineWidth = 1.5;
+        fc.beginPath(); fc.arc(shock.x, shock.y, shock.r0 + (shock.r1 - shock.r0) * (1 - Math.pow(1 - u, 3)), 0, TAU); fc.stroke();
+      }
+    }
+  }
+
+  /* ——— light: the gold answers the pointer, and drifts on its own when there is none ——— */
+  var lx = 0, ly = 0, tx = 0, ty = 0, lastMove = -1e9, lastKey = '';
+  window.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') return;
+    var r = mount.getBoundingClientRect();
+    tx = clamp((e.clientX - r.left - r.width / 2) / (window.innerWidth * .5), -1, 1);
+    ty = clamp((e.clientY - r.top - r.height / 2) / (window.innerHeight * .5), -1, 1);
+    lastMove = performance.now();
+  }, { passive: true });
+  function lightStep(t) {
+    var gx, gy, key, st;
+    if (t - lastMove < 4000) { gx = tx; gy = ty; }
+    else { gx = Math.sin(t / 3300) * .4; gy = Math.cos(t / 4700) * .3 - .1; }
+    lx += (gx - lx) * .07; ly += (gy - ly) * .07;
+    key = lx.toFixed(3) + ',' + ly.toFixed(3);
+    if (key === lastKey) return;
+    lastKey = key;
+    st = piece.style;
+    st.setProperty('--tx', (-ly * 6).toFixed(2));
+    st.setProperty('--ty', (lx * 6).toFixed(2));
+    st.setProperty('--la', (-58 + lx * 48 - ly * 16).toFixed(1));
+    st.setProperty('--gx', (34 + lx * 20).toFixed(1) + '%');
+    st.setProperty('--gy', (20 + ly * 16).toFixed(1) + '%');
+    if (!spin) {
+      light.setAttribute('x', (190 + lx * 170).toFixed(0));
+      light.setAttribute('y', (150 + ly * 150).toFixed(0));
+    }
+  }
+
+  /* ——— the draw ——— */
+  var angle = 0, shown = 0, spin = null, sweepT0 = 0;
+  var total = 0, counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], past = [], cols = {};
+
+  // Uniform 1–10 from 32 bits of system entropy; the top six values are rejected so no number is favoured.
   function roll() {
-    var b = new Uint8Array(1);
-    do { crypto.getRandomValues(b); } while (b[0] >= 250);
-    return b[0] % 10 + 1;
+    var b = new Uint32Array(1), h;
+    do { crypto.getRandomValues(b); } while (b[0] >= 4294967290);
+    h = ('0000000' + b[0].toString(16).toUpperCase()).slice(-8);
+    return { n: b[0] % 10 + 1, hex: h.slice(0, 4) + ' ' + h.slice(4) };
   }
 
-  var angle = 0, shown = 0, spinning = false, total = 0, past = [];
-
-  function show(a) {
-    marker.setAttribute('transform', 'rotate(' + a + ' 200 200)');
-    var n = Math.round(a / 36) % 10 || 10;
+  function setAngle(a, vel) {
+    var n = ((Math.round(a / 36) % 10) + 10) % 10 || 10, i, gap, op;
+    carriage.setAttribute('transform', 'rotate(' + a.toFixed(2) + ' 300 300)');
+    gem.setAttribute('transform', 'rotate(' + (-a).toFixed(2) + ' 300 160)');
+    gap = clamp(vel * .012, 0, 7); op = clamp(vel / 500, 0, 1) * .5;
+    for (i = 0; i < ghosts.length; i++) {
+      ghosts[i].setAttribute('transform', 'rotate(' + (-(i + 1) * gap).toFixed(2) + ' 300 300)');
+      ghosts[i].setAttribute('opacity', (op * (1 - i / 9)).toFixed(3));
+    }
     if (n !== shown) {
-      if (indexEls[shown]) indexEls[shown].classList.remove('on');
-      indexEls[n].classList.add('on');
-      result.textContent = n;
+      if (shown) { idx[shown].classList.remove('on'); stem[shown].classList.remove('on'); }
+      idx[n].classList.add('on'); stem[n].classList.add('on');
+      num.textContent = n; numSweep.textContent = n;
+      if (spin) tick(vel);
       shown = n;
     }
   }
 
-  function settle(n) {
-    spinning = false;
-    dial.classList.remove('spinning');
-    btn.disabled = false;
-    total++;
-    past.unshift(n);
-    if (past.length > 12) past.pop();
-    historyEl.innerHTML = past.map(function (v) { return '<li>' + v + '</li>'; }).join('');
-    countEl.textContent = '最近结果 · 共 ' + total + ' 次';
-    announce.textContent = '结果是 ' + n;
+  function pad(v) { return ('000' + v).slice(-4); }
+  function render() {
+    var cur = past[0], max, i;
+    if (!cur) return;
+    $('sealChar').textContent = CAPS.charAt(cur.n - 1);
+    $('serial').textContent = '第 ' + pad(cur.no) + ' 签';
+    $('rStem').textContent = STEMS.charAt(cur.n - 1);
+    $('rTone').textContent = (cur.n > 5 ? '少' : '') + TONES[(cur.n - 1) % 5];
+    $('entropy').textContent = '熵 ' + cur.hex;
+    $('rows').innerHTML = past.map(function (p) {
+      return '<li><span class="no">' + pad(p.no) + '</span><span class="v">' + p.n + '</span><span>' + CAPS.charAt(p.n - 1) +
+        '</span><span>' + STEMS.charAt(p.n - 1) + '</span><span class="hx">' + p.hex + '</span><span class="tm">' + p.time + '</span></li>';
+    }).join('');
+    max = Math.max.apply(null, counts);
+    for (i = 1; i <= 10; i++) {
+      cols[i].b.style.height = (max ? counts[i] / max * 100 : 0) + '%';
+      cols[i].c.textContent = counts[i] || '';
+      cols[i].el.classList.toggle('cur', i === cur.n);
+    }
+    $('spreadCap').textContent = '十数分布 · 共 ' + total + ' 签';
+  }
+
+  function settle(r, quiet) {
+    total++; counts[r.n]++;
+    past.unshift({ no: total, n: r.n, hex: r.hex, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) });
+    if (past.length > 6) past.pop();
+    face.classList.remove('spinning');
+    num.setAttribute('filter', 'url(#emboss)');
+    btn.classList.remove('busy'); label.textContent = '抽取';
+    render();
+    if (!quiet) {
+      bell(r.n);
+      if (!reduce) {
+        num.classList.remove('reveal'); piece.classList.remove('won'); seal.classList.remove('stamp');
+        void piece.offsetWidth;
+        num.classList.add('reveal'); piece.classList.add('won'); seal.classList.add('stamp');
+        sweepT0 = performance.now() + 180;
+        burst(r.n);
+      }
+    }
+    $('announce').textContent = '第 ' + total + ' 签：' + r.n + '，天干' + STEMS.charAt(r.n - 1);
   }
 
   function draw(instant) {
-    if (spinning) return;
-    var n = roll();
-    var from = angle, delta = ((n * 36 - from) % 360 + 360) % 360;
-    var to = from + delta + (instant ? 0 : 360 * 3);
-    angle = to;
-    if (instant || reduce) { show(to); settle(n); return; }
-    spinning = true;
-    btn.disabled = true;
-    dial.classList.add('spinning');
-    var start = performance.now(), dur = 2600;
-    (function frame(now) {
-      var t = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - t, 4);
-      show(from + (to - from) * e);
-      if (t < 1) requestAnimationFrame(frame); else { show(to); settle(n); }
-    })(start);
+    if (spin) { spin.skip = true; return; }
+    var r = roll(), from = angle, to = from + ((r.n * 36 - from) % 360 + 360) % 360 + (instant || reduce ? 0 : 1800);
+    if (instant || reduce) { angle = to % 360; setAngle(to, 0); settle(r, instant); return; }
+    spin = { from: from, to: to, t0: 0, dur: 3800, r: r, last: from, lt: 0, skip: false };
+    face.classList.add('spinning');
+    num.removeAttribute('filter'); num.classList.remove('reveal');
+    btn.classList.add('busy'); label.textContent = '即刻揭晓';
+    thump();
   }
 
+  function spinStep(t) {
+    var s = spin, u, a, v;
+    if (!s.t0) { s.t0 = t; s.lt = t; }
+    u = (t - s.t0) / s.dur;
+    if (!s.skip && u < 1) {
+      a = s.from + (s.to - s.from) * (1 - Math.pow(1 - u, 2.6));
+      setAngle(a, (a - s.last) / Math.max(1, t - s.lt) * 1000);
+      s.last = a; s.lt = t;
+      return;
+    }
+    v = (t - s.t0 - s.dur) / 460;
+    if (!s.skip && v < 1) { setAngle(s.to + 1.5 * Math.exp(-4.5 * v) * Math.sin(v * Math.PI * 3), 0); return; }
+    angle = s.to % 360;
+    spin = null;
+    setAngle(s.to, 0);
+    settle(s.r, false);
+  }
+
+  function sweepStep(t) {
+    var u, e;
+    if (!sweepT0) return;
+    u = (t - sweepT0) / 950;
+    if (u < 0) return;
+    if (u >= 1) { sweepT0 = 0; sweepGrad.setAttribute('gradientTransform', 'translate(-400 0)'); return; }
+    e = u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    sweepGrad.setAttribute('gradientTransform', 'translate(' + (150 + e * 300).toFixed(1) + ' 0) skewX(-18)');
+  }
+
+  function frame(t) {
+    requestAnimationFrame(frame);
+    if (!reduce) { lightStep(t); fxStep(t); }
+    if (spin) spinStep(t);
+    sweepStep(t);
+  }
+
+  /* ——— wiring ——— */
+  for (n = 1; n <= 10; n++) {
+    var col = document.createElement('div');
+    col.className = 'col';
+    col.innerHTML = '<span class="c"></span><span class="t"><span class="b"></span></span><span class="n">' + n + '</span>';
+    $('bars').appendChild(col);
+    cols[n] = { el: col, c: col.querySelector('.c'), b: col.querySelector('.b') };
+  }
   btn.addEventListener('click', function () { draw(false); });
   document.addEventListener('keydown', function (ev) {
-    if ((ev.code === 'Space' || ev.code === 'Enter') && ev.target !== btn && !ev.repeat) {
+    if ((ev.code === 'Space' || ev.code === 'Enter') && ev.target.tagName !== 'BUTTON' && !ev.repeat) {
       ev.preventDefault();
       draw(false);
     }
   });
+  window.addEventListener('resize', function () { sizeFx(); paint(); });
+  if (window.ResizeObserver) new ResizeObserver(paint).observe(mount);
+  sizeFx();
+  paint();
 
-  draw(true); // open on a real draw rather than an empty dial
+  function start(data) {
+    if (data && data.past && data.past.length) {
+      past = data.past; counts = data.counts; total = data.total;
+      angle = past[0].n * 36 % 360;
+      setAngle(angle, 0);
+      render();
+    } else {
+      draw(true); // open on a real draw rather than an empty dial
+    }
+    requestAnimationFrame(frame);
+  }
+  var hot = window.claude && window.claude.hot;
+  if (hot && hot.snapshot) hot.snapshot(function () { return { past: past, counts: counts, total: total }; });
+  if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
 })();
 </script>
 </body>
