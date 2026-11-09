@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}</style>
+<title>一至十随机数</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&display=swap">
+<style>
+/* Layout: one watch dial in the middle of the screen; a marker orbits ten indices, the drawn number sits in the centre. */
+:root {
+  --bg: #0a1310;
+  --bg-glow: #12241d;
+  --dial-a: #10271f;
+  --dial-b: #143128;
+  --dial-edge: #07100d;
+  --metal: #d8c08c;
+  --metal-dim: #8f815f;
+  --ink: #ece7d8;
+  --muted: #84958b;
+  --line: #2a3f36;
+  --on-metal: #0d1a15;
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", "Songti SC", "Noto Serif CJK SC", serif;
+  --text: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #e6e8e3; --bg-glow: #f4f5f1; --dial-a: #f5f5f0; --dial-b: #ecede7; --dial-edge: #cfd3cb;
+    --metal: #1f4a3b; --metal-dim: #6f8a7e; --ink: #14201b; --muted: #5d6c64; --line: #c3c9c1; --on-metal: #f3f4ef;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #e6e8e3; --bg-glow: #f4f5f1; --dial-a: #f5f5f0; --dial-b: #ecede7; --dial-edge: #cfd3cb;
+  --metal: #1f4a3b; --metal-dim: #6f8a7e; --ink: #14201b; --muted: #5d6c64; --line: #c3c9c1; --on-metal: #f3f4ef;
+  color-scheme: light;
+}
+
+html, body { height: 100%; }
+body {
+  background: radial-gradient(120% 80% at 50% 35%, var(--bg-glow), var(--bg) 70%) var(--bg);
+  color: var(--ink);
+  font-family: var(--text);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 3.5vh, 34px);
+}
+
+.masthead { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.masthead h1 {
+  margin: 0; font-family: var(--display); font-weight: 400;
+  font-size: clamp(22px, 3.4vh, 30px); letter-spacing: 0.42em; margin-right: -0.42em;
+}
+.masthead p { margin: 0; font-size: 12px; letter-spacing: 0.3em; margin-right: -0.3em; color: var(--muted); }
+
+.dial {
+  width: min(100%, 52vh, 440px);
+  aspect-ratio: 1;
+  max-width: 100%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 58%, var(--dial-edge) 100%),
+    repeating-conic-gradient(var(--dial-a) 0deg 1.8deg, var(--dial-b) 1.8deg 3.6deg);
+  box-shadow: 0 0 0 1px var(--metal-dim), 0 0 0 7px var(--bg), 0 0 0 8px var(--line), 0 30px 60px -30px #000;
+}
+.dial svg { display: block; width: 100%; height: 100%; }
+.tick { stroke: var(--metal-dim); stroke-width: 1; }
+.tick.major { stroke: var(--metal); stroke-width: 2; }
+.track { fill: none; stroke: var(--line); stroke-width: 1; }
+.index {
+  font-family: var(--display); font-size: 21px; fill: var(--muted);
+  text-anchor: middle; dominant-baseline: central; transition: fill .25s;
+}
+.index.on { fill: var(--metal); }
+.marker { fill: var(--metal); }
+.result {
+  font-family: var(--display); font-weight: 400; font-size: 132px; fill: var(--ink);
+  text-anchor: middle; dominant-baseline: central; font-variant-numeric: lining-nums;
+}
+.dial.spinning .result { opacity: .55; }
+
+.draw {
+  font: inherit; font-size: 15px; letter-spacing: 0.5em; padding: 14px 44px 14px calc(44px + 0.5em);
+  color: var(--on-metal); background: var(--metal); border: 0; border-radius: 999px; cursor: pointer;
+  transition: transform .15s, opacity .2s;
+}
+.draw:hover { transform: translateY(-1px); }
+.draw:active { transform: translateY(1px); }
+.draw:disabled { opacity: .45; cursor: default; transform: none; }
+.draw:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+
+.log { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 58px; }
+.log-label { font-size: 11px; letter-spacing: 0.3em; margin-right: -0.3em; color: var(--muted); }
+.log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
+.log li {
+  font-family: var(--display); font-size: 18px; color: var(--muted);
+  font-variant-numeric: tabular-nums lining-nums; min-width: 1.3em; text-align: center;
+}
+.log li:first-child { color: var(--metal); border-bottom: 1px solid var(--metal); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1>一至十</h1>
+  <p>十个数字 · 机会均等</p>
+</header>
+
+<div class="dial" id="dial">
+  <svg viewBox="0 0 400 400" role="img" aria-label="一到十的随机数表盘">
+    <g id="ticks"></g>
+    <circle class="track" cx="200" cy="200" r="124"></circle>
+    <g id="indices"></g>
+    <g id="marker"><polygon class="marker" points="200,92 192.5,110 207.5,110"></polygon></g>
+    <text class="result" id="result" x="200" y="204">–</text>
+  </svg>
+</div>
+<span class="sr" id="announce" aria-live="polite"></span>
+
+<button class="draw" id="draw" type="button">抽取</button>
+
+<section class="log" aria-label="最近结果">
+  <span class="log-label" id="count">最近结果</span>
+  <ol id="history"></ol>
+</section>
+
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  var ticks = document.getElementById('ticks');
+  var indices = document.getElementById('indices');
+  var marker = document.getElementById('marker');
+  var result = document.getElementById('result');
+  var dial = document.getElementById('dial');
+  var btn = document.getElementById('draw');
+  var historyEl = document.getElementById('history');
+  var countEl = document.getElementById('count');
+  var announce = document.getElementById('announce');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function polar(r, deg) {
+    var a = deg * Math.PI / 180;
+    return [200 + r * Math.sin(a), 200 - r * Math.cos(a)];
+  }
+  // 50 graduations; every fifth one is a number's index. 10 sits at twelve o'clock.
+  for (var i = 0; i < 50; i++) {
+    var major = i % 5 === 0, p1 = polar(major ? 172 : 178, i * 7.2), p2 = polar(186, i * 7.2);
+    var l = document.createElementNS(NS, 'line');
+    l.setAttribute('x1', p1[0]); l.setAttribute('y1', p1[1]);
+    l.setAttribute('x2', p2[0]); l.setAttribute('y2', p2[1]);
+    l.setAttribute('class', major ? 'tick major' : 'tick');
+    ticks.appendChild(l);
+  }
+  var indexEls = {};
+  for (var n = 1; n <= 10; n++) {
+    var p = polar(150, n * 36), t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', p[0]); t.setAttribute('y', p[1]);
+    t.setAttribute('class', 'index');
+    t.textContent = n;
+    indices.appendChild(t);
+    indexEls[n] = t;
+  }
+
+  // Uniform 1–10: reject bytes >= 250 so no number is favoured.
+  function roll() {
+    var b = new Uint8Array(1);
+    do { crypto.getRandomValues(b); } while (b[0] >= 250);
+    return b[0] % 10 + 1;
+  }
+
+  var angle = 0, shown = 0, spinning = false, total = 0, past = [];
+
+  function show(a) {
+    marker.setAttribute('transform', 'rotate(' + a + ' 200 200)');
+    var n = Math.round(a / 36) % 10 || 10;
+    if (n !== shown) {
+      if (indexEls[shown]) indexEls[shown].classList.remove('on');
+      indexEls[n].classList.add('on');
+      result.textContent = n;
+      shown = n;
+    }
+  }
+
+  function settle(n) {
+    spinning = false;
+    dial.classList.remove('spinning');
+    btn.disabled = false;
+    total++;
+    past.unshift(n);
+    if (past.length > 12) past.pop();
+    historyEl.innerHTML = past.map(function (v) { return '<li>' + v + '</li>'; }).join('');
+    countEl.textContent = '最近结果 · 共 ' + total + ' 次';
+    announce.textContent = '结果是 ' + n;
+  }
+
+  function draw(instant) {
+    if (spinning) return;
+    var n = roll();
+    var from = angle, delta = ((n * 36 - from) % 360 + 360) % 360;
+    var to = from + delta + (instant ? 0 : 360 * 3);
+    angle = to;
+    if (instant || reduce) { show(to); settle(n); return; }
+    spinning = true;
+    btn.disabled = true;
+    dial.classList.add('spinning');
+    var start = performance.now(), dur = 2600;
+    (function frame(now) {
+      var t = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - t, 4);
+      show(from + (to - from) * e);
+      if (t < 1) requestAnimationFrame(frame); else { show(to); settle(n); }
+    })(start);
+  }
+
+  btn.addEventListener('click', function () { draw(false); });
+  document.addEventListener('keydown', function (ev) {
+    if ((ev.code === 'Space' || ev.code === 'Enter') && ev.target !== btn && !ev.repeat) {
+      ev.preventDefault();
+      draw(false);
+    }
+  });
+
+  draw(true); // open on a real draw rather than an empty dial
+})();
+</script>
+</body>
+</html>
